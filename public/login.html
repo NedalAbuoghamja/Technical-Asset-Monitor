@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>تسجيل الدخول - منظومة حصر العهد</title>
+  <title>تسجيل الدخول - مراقب الأصول التقنية</title>
   <!-- Google Fonts: Cairo & Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,11 @@
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <!-- Base Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=2">
+  <!-- Microsoft/Corporate UI Override -->
+  <link rel="stylesheet" href="css/corporate-ui.css?v=1">
+  <!-- i18n Script -->
+  <script src="js/i18n.js?v=10"></script>
   <style>
     body.login-page-body {
       display: flex;
@@ -249,8 +253,11 @@
       <div class="login-logo">
         <i class="bi bi-shield-lock-fill"></i>
       </div>
-      <h2 class="login-title">تسجيل الدخول</h2>
-      <p class="login-subtitle">منظومة حصر ومتابعة الأجهزة والأنظمة</p>
+      <button id="langToggleBtn" onclick="if(window.toggleLanguage) window.toggleLanguage(); return false;" class="action-btn circle-btn" style="position: absolute; top: 15px; left: 15px; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.2rem; z-index: 100;">
+        <i class="bi bi-translate"></i>
+      </button>
+      <h2 class="login-title" data-i18n="login">تسجيل الدخول</h2>
+      <p class="login-subtitle" data-i18n="system_subtitle">مراقب الأصول التقنية / Technical Asset Monitor</p>
 
       <div id="alertBox" class="login-alert alert-danger">
         <i class="bi bi-exclamation-octagon-fill"></i>
@@ -259,24 +266,24 @@
 
       <form id="loginForm">
         <div class="form-group">
-          <label for="usernameInput">اسم المستخدم</label>
-          <div class="input-icon-wrapper">
-            <input type="text" id="usernameInput" class="form-control" placeholder="أدخل اسم المستخدم" required autocomplete="username">
-            <i class="bi bi-person-fill"></i>
+          <label class="form-label" data-i18n="username"><span data-i18n="username">اسم المستخدم</span></label>
+          <div class="input-group">
+            <span class="input-icon"><i class="bi bi-person-fill"></i></span>
+            <input type="text" id="username" class="form-input" data-i18n="username" placeholder="اسم المستخدم" required autocomplete="username">
           </div>
         </div>
-
+        
         <div class="form-group">
-          <label for="passwordInput">كلمة المرور</label>
-          <div class="input-icon-wrapper">
-            <input type="password" id="passwordInput" class="form-control" placeholder="أدخل كلمة المرور" required autocomplete="current-password">
-            <i class="bi bi-key-fill"></i>
+          <label class="form-label" data-i18n="password"><span data-i18n="password">كلمة المرور</span></label>
+          <div class="input-group">
+            <span class="input-icon"><i class="bi bi-lock-fill"></i></span>
+            <input type="password" id="password" class="form-input" data-i18n="password" placeholder="كلمة المرور" required autocomplete="current-password">
           </div>
         </div>
-
-        <button type="submit" class="login-btn">
-          <span>دخول آمن</span>
-          <i class="bi bi-box-arrow-in-left"></i>
+        
+        <button type="submit" class="btn btn-primary login-btn" style="width: 100%; margin-top: 10px;">
+          <i class="bi bi-box-arrow-in-right"></i>
+          <span data-i18n="login_btn">تسجيل الدخول</span>
         </button>
       </form>
     </div>
@@ -299,9 +306,8 @@
 
     loginForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      
-      const username = document.getElementById('usernameInput').value;
-      const password = document.getElementById('passwordInput').value;
+      const username = document.getElementById('username').value;
+      const password = document.getElementById('password').value;
 
       // Hide previous alert
       alertBox.style.display = 'none';

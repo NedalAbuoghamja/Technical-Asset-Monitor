@@ -82,7 +82,8 @@ async function initDb() {
   await dbRun(`
     CREATE TABLE IF NOT EXISTS columns (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE
+      name TEXT UNIQUE,
+      section TEXT DEFAULT 'specs'
     )
   `);
 
@@ -104,8 +105,44 @@ async function initDb() {
       notes TEXT,
       systemsUsed TEXT,
       phone TEXT,
+      employeeId TEXT,
       technicalStatus TEXT,
-      customFields TEXT
+      customFields TEXT,
+      connectionType TEXT
+    )
+  `);
+
+  
+  try {
+    await dbRun(`ALTER TABLE devices ADD COLUMN employeeId TEXT`);
+    console.log("Added employeeId column to devices table.");
+  } catch (err) {
+    // Column likely exists
+  }
+
+  // Try to add connectionType to existing devices table if it doesn't exist
+  try {
+    await dbRun(`ALTER TABLE devices ADD COLUMN connectionType TEXT`);
+    console.log("Added connectionType column to devices table.");
+  } catch (err) {
+    // Column likely exists
+  }
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS device_history (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      device_id INTEGER,
+      previous_employee TEXT,
+      previous_department TEXT,
+      previous_section TEXT,
+      previous_unit TEXT,
+      new_employee TEXT,
+      new_department TEXT,
+      new_section TEXT,
+      new_unit TEXT,
+      timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+      changed_by TEXT,
+      FOREIGN KEY(device_id) REFERENCES devices(id) ON DELETE CASCADE
     )
   `);
 
@@ -128,7 +165,7 @@ async function initDb() {
         await dbRun(`
           INSERT INTO devices (
             id, employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
-            monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
+            monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields
           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           d.id,
@@ -147,6 +184,7 @@ async function initDb() {
           d.notes || 'لا يوجد',
           d.systemsUsed || 'لا يوجد',
           d.phone || 'لا يوجد',
+      employeeId || '',
           d.technicalStatus || 'سليم',
           JSON.stringify(d.customFields || [])
         ]);
@@ -393,29 +431,115 @@ app.get('/api/devices', authenticateToken, async (req, res) => {
 // Get all custom columns
 app.get('/api/columns', authenticateToken, async (req, res) => {
   try {
-    const rows = await dbAll(`SELECT name FROM columns`);
-    res.json(rows.map(r => r.name));
+    const rows = await dbAll(`SELECT id, name, section FROM columns`);
+    res.json(rows);
   } catch (error) {
     res.status(500).json({ error: 'حدث خطأ أثناء جلب الأعمدة' });
   }
 });
 
+// Get device history
+app.get('/api/devices/:id/history', authenticateToken, async (req, res) => {
+  const device_id = parseInt(req.params.id);
+  try {
+    const history = await dbAll(`SELECT * FROM device_history WHERE device_id = ? ORDER BY timestamp DESC`, [device_id]);
+    res.json(history);
+  } catch (error) {
+    console.error("Get history error:", error);
+    res.status(500).json({ error: 'حدث خطأ أثناء جلب سجل الجهاز' });
+  }
+});
+
 // Add custom column (Admin only)
 app.post('/api/columns', requireAdmin, async (req, res) => {
-  const name = req.body.name ? req.body.name.trim() : '';
-  if (!name) {
-    return res.status(400).json({ error: 'الاسم مطلوب' });
+  const { name, section } = req.body;
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'اسم الحقل مطلوب' });
+  }
+  const colSection = section || 'specs';
+  try {
+    const result = await dbRun(`INSERT INTO columns (name, section) VALUES (?, ?)`, [name.trim(), colSection]);
+    res.status(201).json({ id: result.lastID, name: name.trim(), section: colSection });
+  } catch (error) {
+    if (error.message.includes('UNIQUE')) {
+      res.status(400).json({ error: 'اسم الحقل موجود مسبقاً' });
+    } else {
+      res.status(500).json({ error: 'فشل إضافة الحقل' });
+    }
+  }
+});
+
+// Edit custom column (Admin only)
+app.put('/api/columns/:id', requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id);
+  const { name, section } = req.body;
+  if (!name || name.trim() === '') {
+    return res.status(400).json({ error: 'اسم الحقل مطلوب' });
   }
 
   try {
-    await dbRun(`INSERT INTO columns (name) VALUES (?)`, [name]);
-    const rows = await dbAll(`SELECT name FROM columns`);
-    res.json(rows.map(r => r.name));
+    const column = await dbGet(`SELECT name FROM columns WHERE id = ?`, [id]);
+    if (!column) return res.status(404).json({ error: 'العمود غير موجود' });
+    const oldName = column.name;
+    const newName = name.trim();
+
+    if (section) {
+      await dbRun(`UPDATE columns SET name = ?, section = ? WHERE id = ?`, [newName, section, id]);
+    } else {
+      await dbRun(`UPDATE columns SET name = ? WHERE id = ?`, [newName, id]);
+    }
+
+    // Update devices JSON fields
+    const devices = await dbAll(`SELECT id, customFields FROM devices WHERE customFields IS NOT NULL AND customFields != '[]'`);
+    for (const d of devices) {
+      let fields = JSON.parse(d.customFields);
+      let changed = false;
+      fields.forEach(f => {
+        if (f.label === oldName) {
+          f.label = newName;
+          changed = true;
+        }
+      });
+      if (changed) {
+        await dbRun(`UPDATE devices SET customFields = ? WHERE id = ?`, [JSON.stringify(fields), d.id]);
+      }
+    }
+
+    res.json({ success: true });
+    broadcastUpdate('devices_updated', { action: 'columns_changed' });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
-      return res.status(400).json({ error: 'العمود موجود بالفعل' });
+      return res.status(400).json({ error: 'الاسم موجود بالفعل' });
     }
-    res.status(500).json({ error: 'فشل في إضافة العمود' });
+    res.status(500).json({ error: 'فشل تعديل الحقل' });
+  }
+});
+
+// Delete custom column (Admin only)
+app.delete('/api/columns/:id', requireAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const column = await dbGet(`SELECT name FROM columns WHERE id = ?`, [id]);
+    if (!column) return res.status(404).json({ error: 'العمود غير موجود' });
+    const oldName = column.name;
+
+    await dbRun(`DELETE FROM columns WHERE id = ?`, [id]);
+
+    // Remove from devices JSON fields
+    const devices = await dbAll(`SELECT id, customFields FROM devices WHERE customFields IS NOT NULL AND customFields != '[]'`);
+    for (const d of devices) {
+      let fields = JSON.parse(d.customFields);
+      const originalLength = fields.length;
+      fields = fields.filter(f => f.label !== oldName);
+      if (fields.length !== originalLength) {
+        await dbRun(`UPDATE devices SET customFields = ? WHERE id = ?`, [JSON.stringify(fields), d.id]);
+      }
+    }
+
+    res.json({ success: true });
+    broadcastUpdate('devices_updated', { action: 'columns_changed' });
+  } catch (error) {
+    res.status(500).json({ error: 'فشل حذف الحقل' });
   }
 });
 
@@ -423,20 +547,18 @@ app.post('/api/columns', requireAdmin, async (req, res) => {
 app.post('/api/devices', requireAdmin, async (req, res) => {
   try {
     const {
-      employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
+      employeeName, orgPath, deviceModel, ram, storageType, storageSize,
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
     } = req.body;
 
     const result = await dbRun(`
       INSERT INTO devices (
-        employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
-        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        employeeName, orgPath, deviceModel, ram, storageType, storageSize,
+        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, department, circle, section, unit
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '')
     `, [
       employeeName || 'غير معروف',
-      department || 'لا يوجد',
-      section || 'لا يوجد',
-      unit || 'لا يوجد',
+      orgPath || 'مجلس الإدارة',
       deviceModel || 'لا يوجد',
       ram || 'لا يوجد',
       storageType || 'SSD',
@@ -449,13 +571,16 @@ app.post('/api/devices', requireAdmin, async (req, res) => {
       systemsUsed || 'لا يوجد',
       phone || 'لا يوجد',
       technicalStatus || 'سليم',
-      JSON.stringify(customFields || [])
+      JSON.stringify(customFields || []),
+      connectionType || 'USB',
+      osVersion || '',
+      ipAddress || ''
     ]);
 
     const newDevice = {
       id: result.lastID,
-      employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
+      employeeName, orgPath, deviceModel, ram, storageType, storageSize,
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
     };
 
     res.status(201).json(newDevice);
@@ -476,14 +601,29 @@ app.put('/api/devices/:id', requireAdmin, async (req, res) => {
     }
 
     const {
-      employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
+      employeeName, orgPath, deviceModel, ram, storageType, storageSize,
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
     } = req.body;
 
     const updatedEmployeeName = employeeName !== undefined ? employeeName : device.employeeName;
-    const updatedDepartment = department !== undefined ? department : device.department;
-    const updatedSection = section !== undefined ? section : device.section;
-    const updatedUnit = unit !== undefined ? unit : device.unit;
+    const updatedOrgPath = orgPath !== undefined ? orgPath : device.orgPath;
+
+    // Check if employee or location changed
+    if (
+      updatedEmployeeName !== device.employeeName ||
+      updatedOrgPath !== device.orgPath
+    ) {
+      await dbRun(`
+        INSERT INTO device_history (
+          device_id, previous_employee, previous_orgPath,
+          new_employee, new_orgPath, changed_by
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `, [
+        id, device.employeeName, device.orgPath,
+        updatedEmployeeName, updatedOrgPath, req.user.username
+      ]);
+    }
+
     const updatedDeviceModel = deviceModel !== undefined ? deviceModel : device.deviceModel;
     const updatedRam = ram !== undefined ? ram : device.ram;
     const updatedStorageType = storageType !== undefined ? storageType : device.storageType;
@@ -495,26 +635,28 @@ app.put('/api/devices/:id', requireAdmin, async (req, res) => {
     const updatedNotes = notes !== undefined ? notes : device.notes;
     const updatedSystemsUsed = systemsUsed !== undefined ? systemsUsed : device.systemsUsed;
     const updatedPhone = phone !== undefined ? phone : device.phone;
+    const updatedEmployeeId = employeeId !== undefined ? employeeId : device.employeeId;
     const updatedTechnicalStatus = technicalStatus !== undefined ? technicalStatus : device.technicalStatus;
     const updatedCustomFields = customFields !== undefined ? JSON.stringify(customFields) : device.customFields;
+    const updatedConnectionType = connectionType !== undefined ? connectionType : device.connectionType;
+    const updatedOsVersion = osVersion !== undefined ? osVersion : device.osVersion;
+    const updatedIpAddress = ipAddress !== undefined ? ipAddress : device.ipAddress;
 
     await dbRun(`
       UPDATE devices SET
-        employeeName = ?, department = ?, section = ?, unit = ?, deviceModel = ?, ram = ?, storageType = ?, storageSize = ?,
-        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, technicalStatus = ?, customFields = ?
+        employeeName = ?, orgPath = ?, deviceModel = ?, ram = ?, storageType = ?, storageSize = ?,
+        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, employeeId = ?, technicalStatus = ?, customFields = ?, connectionType = ?, osVersion = ?, ipAddress = ?
       WHERE id = ?
     `, [
-      updatedEmployeeName, updatedDepartment, updatedSection, updatedUnit, updatedDeviceModel, updatedRam, updatedStorageType, updatedStorageSize,
-      updatedMonitorsCount, updatedDeviceNature, updatedServiceTag, updatedRecurringIssues, updatedNotes, updatedSystemsUsed, updatedPhone, updatedTechnicalStatus, updatedCustomFields,
+      updatedEmployeeName, updatedOrgPath, updatedDeviceModel, updatedRam, updatedStorageType, updatedStorageSize,
+      updatedMonitorsCount, updatedDeviceNature, updatedServiceTag, updatedRecurringIssues, updatedNotes, updatedSystemsUsed, updatedPhone, updatedEmployeeId, updatedTechnicalStatus, updatedCustomFields, updatedConnectionType, updatedOsVersion, updatedIpAddress,
       id
     ]);
 
     const updatedDevice = {
       id,
       employeeName: updatedEmployeeName,
-      department: updatedDepartment,
-      section: updatedSection,
-      unit: updatedUnit,
+      orgPath: updatedOrgPath,
       deviceModel: updatedDeviceModel,
       ram: updatedRam,
       storageType: updatedStorageType,
@@ -527,7 +669,10 @@ app.put('/api/devices/:id', requireAdmin, async (req, res) => {
       systemsUsed: updatedSystemsUsed,
       phone: updatedPhone,
       technicalStatus: updatedTechnicalStatus,
-      customFields: updatedCustomFields ? JSON.parse(updatedCustomFields) : []
+      customFields: updatedCustomFields ? JSON.parse(updatedCustomFields) : [],
+      connectionType: updatedConnectionType,
+      osVersion: updatedOsVersion,
+      ipAddress: updatedIpAddress
     };
 
     res.json(updatedDevice);
@@ -577,11 +722,14 @@ app.get('/api/export', authenticateToken, async (req, res) => {
     });
 
     const formattedData = devices.map(d => {
+      const paths = d.orgPath ? d.orgPath.split('||') : [];
       const row = {
         "اسم الموظف": d.employeeName,
-        "الإدارة": d.department,
-        "القسم": d.section,
-        "الوحدة": d.unit,
+        "الرقم الوظيفي": d.employeeId || '',
+        "مجلس الإدارة / المكاتب": paths[0] || d.department || '',
+        "الإدارة": paths[1] || d.section || '',
+        "القسم": paths[2] || d.unit || '',
+        "الوحدة": paths[3] || '',
         "نوع الجهاز": d.deviceModel,
         "سعة الرام (RAM)": d.ram,
         "نوع الهاردسك": d.storageType,
@@ -634,17 +782,29 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       return res.status(400).json({ error: 'تنسيق ورقة عمل Excel غير صالح أو لا يحتوي على بيانات كافية' });
     }
 
-    let headerIdx = -1;
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      if (row.includes("اسم الموظف") || row.includes("السيرفس تاق (Service Tag)") || row.includes("نوع الجهاز")) {
+    let headerIdx = 0;
+    let maxScore = -1;
+    
+    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+      const row = rows[i] || [];
+      let score = 0;
+      row.forEach(cell => {
+        if (!cell) return;
+        const c = String(cell).trim();
+        if (
+          c.includes("الموظف") || c.includes("الاسم") || c.includes("الجهاز") || 
+          c.includes("الرام") || c.includes("سيريال") || c.includes("الهاردسك") || 
+          c.includes("القسم") || c.includes("الإدارة") || c.includes("الوحدة") ||
+          c.includes("ملاحظات") || c.includes("الهاتف") || c.includes("الشاشات") ||
+          c.includes("السيرفس")
+        ) {
+          score++;
+        }
+      });
+      if (score > maxScore) {
+        maxScore = score;
         headerIdx = i;
-        break;
       }
-    }
-
-    if (headerIdx === -1) {
-      headerIdx = rows.length > 2 ? 2 : 0;
     }
 
     const headers = rows[headerIdx];
@@ -657,33 +817,47 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
     }));
 
     const standardHeaders = [
-      "اسم الموظف", "الإدارة", "القسم", "الوحدة", "نوع الجهاز",
+      "اسم الموظف", "الاسم", "الإدارة", "القسم", "الوحدة", "نوع الجهاز",
       "سعة الرام (RAM)", "سعة الرام", "نوع الهاردسك", "حجم الهاردسك",
       "عدد الشاشات", "طبيعة الجهاز", "السيرفس تاق (Service Tag)", "السيرفس تاق",
       "السيريال ماي [Service Tag]", "الحالة التقنية", "المشاكل المتكررة", "الملاحظات", "ملاحظات", "الأنظمة والمنظومات المستخدمة",
-      "الأنظمة والمستلزمات المستخدمة", "الهاتف / الملحقات", "الهاتف", "هاتف", "تليفون"
+      "الأنظمة والمستلزمات المستخدمة", "الهاتف / الملحقات", "الهاتف", "هاتف", "تليفون",
+      "مجلس الإدارة / المكاتب", "الرقم الوظيفي", "رقم الموظف"
     ];
 
     let addedCount = 0;
     let updatedCount = 0;
 
     for (const row of dataRows) {
-      if (!row || row.length === 0 || !row[0]) continue;
+      if (!row || row.length === 0) continue;
 
       const getValue = (headerNames, indexFallback) => {
+        let foundIdx = -1;
         for (const name of headerNames) {
           const idx = headers.indexOf(name);
-          if (idx !== -1 && row[idx] !== undefined) {
-            return String(row[idx]).trim();
+          if (idx !== -1) {
+            foundIdx = idx;
+            break;
           }
         }
-        if (row[indexFallback] !== undefined) {
+        
+        if (foundIdx !== -1) {
+          if (row[foundIdx] !== undefined) {
+             return String(row[foundIdx]).trim();
+          } else {
+             return 'لا يوجد';
+          }
+        }
+        
+        if (indexFallback !== undefined && row[indexFallback] !== undefined) {
           return String(row[indexFallback]).trim();
         }
         return 'لا يوجد';
       };
 
-      const employeeName = getValue(["اسم الموظف"], 0);
+      const employeeName = getValue(["اسم الموظف", "الاسم"], 0);
+      const employeeId = getValue(["الرقم الوظيفي", "رقم الموظف"]);
+      const topLevel = getValue(["مجلس الإدارة / المكاتب"]);
       const department = getValue(["الإدارة"], 1);
       const section = getValue(["القسم"], 2);
       const unit = getValue(["الوحدة"], 3);
@@ -700,6 +874,14 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       const notes = getValue(["الملاحظات", "ملاحظات"], 13);
       const systemsUsed = getValue(["الأنظمة والمنظومات المستخدمة", "الأنظمة والمستلزمات المستخدمة"], 14);
       const phone = getValue(["الهاتف / الملحقات", "هاتف", "تليفون"], 15);
+      
+      let paths = [];
+      if (topLevel && topLevel !== 'لا يوجد') paths.push(topLevel);
+      if (department && department !== 'لا يوجد') paths.push(department);
+      if (section && section !== 'لا يوجد') paths.push(section);
+      if (unit && unit !== 'لا يوجد') paths.push(unit);
+      
+      const orgPath = paths.length > 0 ? paths.join('||') : 'مجلس الإدارة';
 
       const customFields = [];
       headers.forEach((header, idx) => {
@@ -731,11 +913,11 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       } else {
         await dbRun(`
           INSERT INTO devices (
-            employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
+            employeeName, employeeId, orgPath, department, section, unit, deviceModel, ram, storageType, storageSize,
             monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
-          employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
+          employeeName, employeeId !== 'لا يوجد' ? employeeId : '', orgPath, department, section, unit, deviceModel, ram, storageType, storageSize,
           monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, JSON.stringify(customFields)
         ]);
         addedCount++;

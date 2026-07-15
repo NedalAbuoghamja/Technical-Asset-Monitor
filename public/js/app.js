@@ -5,6 +5,115 @@ let deptChartInstance = null;
 let statusChartInstance = null;
 let customColumns = [];
 
+const orgStructure = {
+  "مجلس الإدارة": {
+    "مكتب المراجعة الداخلية": {
+      "قسم المراجعة الادارية والمالية": {},
+      "قسم المراجعة الفنية وضمان الدخل": {}
+    },
+    "المكتب القانوني": {
+      "وحدة العقود والاتفاقيات القانونية": {},
+      "وحدة الشؤون القانونية": {}
+    },
+    "مكتب المخاطر والامتثال": {},
+    "مكتب الاستراتيجيات": {},
+    "مكتب شؤون مجلس الادارة": {
+      "وحدة التقارير والمعلومات": {},
+      "وحدة المتابعة وشؤون مجلس الادارة": {},
+      "وحدة الاعلام": {},
+      "وحدة العلاقات العامة": {}
+    },
+    "المدير العام": {
+      "مكتب امن المعلومات والامن السيبراني": {
+        "وحدة المتابعة والجودة والسكرتارية": {},
+        "قسم سياسات واجراءات امن المعلومات": {},
+        "قسم امن المعلومات والامن السيبراني": {},
+        "قسم ادارة المخاطر واستمرارية الاعمال": {}
+      },
+      "مكتب ضمان الجودة": {},
+      "مكتب البرامج والمشروعات": {},
+      "مكتب شؤون المدير العام": {
+        "وحدة المتابعة والتقارير": {},
+        "وحدة التوتيق والارشفة الالكترونية": {}
+      },
+      "الإدارة الفنية": {
+        "دائرة التشغيل والصيانة": {
+          "محطة درنة": {},
+          "قسم القوى والتكييف": {
+            "وحدة القوى": {},
+            "وحدة التكييف": {}
+          },
+          "قسم الدعم الفني": {
+            "وحدة شبكة البيانات": {},
+            "وحدة المقسمات الدولية": {},
+            "وحدة التراسل والكوابل والتركيبات": {}
+          },
+          "قسم تخطيط وإدارة موارد الشبكة": {}
+        },
+        "مركز عمليات الشبكة": {
+          "قسم نظم معلومات مركز عمليات الشبكة": {},
+          "قسم الدعم الفني لمركز عمليات الشبكة": {
+            "وحدة متابعة جودة مؤشرات أداء الشبكة": {}
+          }
+        }
+      },
+      "إدارة تقنية المعلومات": {
+        "قسم الدعم الفني لتقنية المعلومات": {},
+        "قسم البنية التحتية لتقنية المعلومات": {},
+        "قسم التطبيقات": {
+          "وحدة الحلول المعلوماتية والتطوير": {}
+        }
+      },
+      "إدارة الخدمات": {
+        "قسم الخدمات": {
+          "وحدة الحركة والمندوبين": {},
+          "وحدة الخدمات المساندة": {},
+          "وحدة الأمن والسلامة المهنية": {}
+        },
+        "قسم المخازن": {},
+        "قسم المشتريات والعقود": {
+          "وحدة المشتريات الداخلية والخارجية": {},
+          "وحدة العقود والموردين": {}
+        }
+      },
+      "إدارة الموارد": {
+        "قسم عمليات الموارد البشرية": {
+          "وحدة شؤون العاملين": {},
+          "وحدة المرتبات والمزايا": {},
+          "وحدة الرعاية الصحية": {}
+        },
+        "قسم تخطيط الموارد": {},
+        "قسم التطوير والتقييم": {
+          "وحدة التدريب": {},
+          "وحدة تقييم الأداء": {}
+        }
+      },
+      "الإدارة المالية": {
+        "قسم الاعتمادات المستندية ومتابعة المشاريع": {},
+        "قسم المقبوضات": {},
+        "قسم المدفوعات": {},
+        "قسم المحاسبة والميزانيات والتقارير": {
+          "وحدة الميزانيات والتقارير": {},
+          "وحدة المحاسبة": {}
+        }
+      },
+      "الإدارة التجارية": {
+        "دائرة المنتجات": {
+          "قسم دعم وتحليل المنتجات": {},
+          "قسم تطوير المنتجات": {
+            "وحدة مراقبة المنتجات": {}
+          }
+        },
+        "دائرة التسويق والمبيعات": {
+          "قسم الحركة الهاتفية": {},
+          "قسم الدعم التجاري": {},
+          "قسم البيانات والمنتجات المضافة": {}
+        }
+      }
+    }
+  }
+};;;
+
 // DOM ELEMENTS
 const devicesTableBody = document.getElementById('devicesTableBody');
 const searchInput = document.getElementById('searchInput');
@@ -299,14 +408,17 @@ function initTheme() {
 }
 
 function toggleTheme() {
-  const currentTheme = document.body.className;
-  const newTheme = currentTheme === 'dark-theme' ? 'light-theme' : 'dark-theme';
-  document.body.className = newTheme;
+  const isDark = document.body.classList.contains('dark-theme');
+  const newTheme = isDark ? 'light-theme' : 'dark-theme';
+  
+  document.body.classList.remove('dark-theme', 'light-theme');
+  document.body.classList.add(newTheme);
+  
   localStorage.setItem('theme', newTheme);
   updateThemeIcon(newTheme);
   
   // Re-render charts with correct font colors
-  renderCharts();
+  if (typeof renderCharts === 'function') renderCharts();
 }
 
 function updateThemeIcon(theme) {
@@ -321,13 +433,15 @@ function updateThemeIcon(theme) {
 async function fetchDevices() {
   showTableLoading();
   try {
-    const res = await fetch('/api/devices');
+    const res = await fetch(`/api/devices?_t=${Date.now()}`);
     if (!res.ok) throw new Error('فشل جلب البيانات من الخادم');
     devices = await res.json();
     filteredDevices = [...devices];
     
     populateDeptFilter();
-    renderTable();
+    populateEmployeeDatalist();
+    restoreSearchAndFilters();
+    applySearchAndFilters();
     updateStats();
     renderCharts();
     renderComparisons();
@@ -337,7 +451,7 @@ async function fetchDevices() {
       <tr>
         <td colspan="8" class="loading-cell" style="color: var(--color-danger)">
           <i class="bi bi-exclamation-octagon-fill" style="font-size: 2rem"></i><br>
-          <span>خطأ في تحميل البيانات: ${error.message}</span>
+          <span>${window.t ? window.t('fetch_error') : 'خطأ في تحميل البيانات:'} ${error.message}</span>
         </td>
       </tr>
     `;
@@ -347,26 +461,18 @@ async function fetchDevices() {
 // RENDER TABLE
 function renderTable() {
   const customKeys = getUniqueCustomKeys();
-  const totalCols = 8 + customKeys.length;
+  const totalCols = 5;
   
   // Update header first
   const tableHead = document.querySelector('#devicesTable thead');
   if (tableHead) {
     let headHtml = `
       <tr>
-        <th>الموظف</th>
-        <th>الإدارة / القسم / الوحدة</th>
-        <th>موديل الجهاز</th>
-        <th>نوع/حجم الهاردسك</th>
-        <th>الرام</th>
-        <th>السيريال (Service Tag)</th>
-    `;
-    customKeys.forEach(k => {
-      headHtml += `<th>${k}</th>`;
-    });
-    headHtml += `
-        <th>الحالة التقنية</th>
-        <th class="admin-only-element">الإجراءات</th>
+        <th>الرقم الوظيفي</th>
+        <th>${window.t ? window.t('th_employee') : 'اسم الموظف'}</th>
+        <th>${window.t ? window.t('th_department') : 'المسمى الوظيفي'}</th>
+        <th>${window.t ? window.t('th_status') : 'الحالة التقنية'}</th>
+        <th class="admin-only-element">${window.t ? window.t('th_actions') : 'الإجراءات'}</th>
       </tr>
     `;
     tableHead.innerHTML = headHtml;
@@ -392,53 +498,53 @@ function renderTable() {
     const status = d.technicalStatus || 'سليم';
     let statusClass = 'badge-success';
     let statusIcon = 'bi-check-circle-fill';
+    let statusDisplay = window.t ? window.t('status_clean') : status;
+    
     if (status === 'بحاجة لصيانة') {
       statusClass = 'badge-danger';
       statusIcon = 'bi-tools';
+      statusDisplay = window.t ? window.t('status_need_maint') : status;
     } else if (status === 'تحت الصيانة') {
       statusClass = 'badge-warning';
       statusIcon = 'bi-gear-wide-connected';
+      statusDisplay = window.t ? window.t('status_in_maint') : status;
     }
-    const statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${status}</span>`;
+    const statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusDisplay}</span>`;
 
     // RAM spec clean view
-    const ramSpec = d.ram || 'لا يوجد';
+    const ramSpec = d.deviceNature === 'Printer' ? `<span class="text-muted">${window.t ? window.t('not_applicable') : 'لا ينطبق'}</span>` : (d.ram || (window.t ? window.t('dept_none') : 'لا يوجد'));
     
     // Storage spec clean view
-    const storageSpec = `${d.storageType} ${d.storageSize}`;
+    let storageSpec = `${d.storageType} ${d.storageSize}`;
+    if (d.deviceNature === 'Printer') {
+      const conn = d.connectionType || 'USB';
+      const connIcon = conn === 'Wireless' ? 'bi-wifi' : (conn === 'Network' ? 'bi-hdd-network' : 'bi-usb-symbol');
+      storageSpec = `<i class="bi ${connIcon}"></i> ${conn}`;
+    }
 
     let rowHtml = `
       <td>
         <div class="employee-cell">
+          <span class="emp-name">${d.employeeId || '—'}</span>
+        </div>
+      </td>
+      <td>
+        <div class="employee-cell">
           <span class="emp-name">${d.employeeName}</span>
-          <span class="emp-details">${d.section || 'بدون قسم'} (${d.unit || 'بدون وحدة'})</span>
         </div>
       </td>
       <td>
-        <span class="badge badge-info" style="margin-bottom: 2px;">${d.department}</span>
-        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;">
-          ${d.section || 'لا يوجد'} / ${d.unit || 'لا يوجد'}
-        </div>
+        <span style="font-weight: 500; display: block; margin-bottom: 4px; color: var(--primary-color);">${d.orgPath ? d.orgPath.split('||').pop() : '-'}</span>
+        <span style="font-size: 0.85rem; color: var(--text-muted);" title="${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : ''}">${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : '-'}</span>
       </td>
-      <td>
-        <div style="font-weight: 600">${d.deviceModel}</div>
-        <div style="font-size: 0.75rem; color: var(--text-muted)">طبيعة الجهاز: ${translateNature(d.deviceNature)}</div>
-      </td>
-      <td>${storageSpec}</td>
-      <td>${ramSpec}</td>
-      <td><code>${d.serviceTag}</code></td>
-    `;
-    
-    // Custom keys cells
-    customKeys.forEach(k => {
-      const field = d.customFields ? d.customFields.find(cf => cf.label === k) : null;
-      rowHtml += `<td>${field ? field.value : '—'}</td>`;
-    });
-
-    rowHtml += `
       <td>${statusBadge}</td>
+    `;
+    rowHtml += `
       <td class="admin-only-element">
         <div class="actions-cell">
+          <button class="action-icon-btn btn-view" onclick="viewDeviceHistory(${d.id})" title="سجل حركات الجهاز">
+            <i class="bi bi-clock-history"></i>
+          </button>
           <button class="action-icon-btn btn-view" onclick="viewDeviceDetails(${d.id})" title="عرض التفاصيل والبطاقة التقنية">
             <i class="bi bi-file-earmark-text"></i>
           </button>
@@ -469,8 +575,14 @@ function checkDeviceHasIssues(device) {
 }
 
 function translateNature(nature) {
+  if (typeof window.t === 'function') {
+    if (nature === 'Desktop') return window.t('desktop_pc') || 'مكتبي';
+    if (nature === 'Laptop') return window.t('laptop_pc') || 'محمول';
+    if (nature === 'Printer') return window.t('printer_device') || 'طابعة';
+  }
   if (nature === 'Desktop') return 'مكتبي';
   if (nature === 'Laptop') return 'محمول';
+  if (nature === 'Printer') return 'طابعة';
   return nature;
 }
 
@@ -479,7 +591,7 @@ function showTableLoading() {
     <tr>
       <td colspan="8" class="loading-cell">
         <div class="spinner"></div>
-        <span>جاري تحميل البيانات...</span>
+        <span><span data-i18n="loading">جاري تحميل البيانات...</span></span>
       </td>
     </tr>
   `;
@@ -487,22 +599,35 @@ function showTableLoading() {
 
 // POPULATE DEPARTMENT FILTER DYNAMICALLY
 function populateDeptFilter() {
-  const depts = [...new Set(devices.map(d => d.department))].filter(Boolean);
-  const currentSelection = filterDept.value;
-  
+  const filterDept = document.getElementById('filterDept');
+  if (!filterDept) return;
   filterDept.innerHTML = '<option value="all">الكل</option>';
-  depts.forEach(dept => {
-    const opt = document.createElement('option');
-    opt.value = dept;
-    opt.textContent = dept;
-    filterDept.appendChild(opt);
+  
+  if (orgStructure['مجلس الإدارة']) {
+    Object.keys(orgStructure['مجلس الإدارة']).forEach(dept => {
+      filterDept.add(new Option(dept, dept));
+    });
+  }
+}
+
+// POPULATE EMPLOYEE DATALIST FOR AUTO-COMPLETE
+function populateEmployeeDatalist() {
+  const datalist = document.getElementById('employeeNamesList');
+  if (!datalist) return;
+  
+  const uniqueEmps = new Map();
+  devices.forEach(d => {
+    if (d.employeeName && !uniqueEmps.has(d.employeeName)) {
+      uniqueEmps.set(d.employeeName, true);
+    }
   });
   
-  if (depts.includes(currentSelection)) {
-    filterDept.value = currentSelection;
-  } else {
-    filterDept.value = 'all';
-  }
+  datalist.innerHTML = '';
+  uniqueEmps.forEach((_, name) => {
+    const opt = document.createElement('option');
+    opt.value = name;
+    datalist.appendChild(opt);
+  });
 }
 
 // UPDATE STATISTICS
@@ -525,10 +650,23 @@ function renderCharts() {
   
   const deptsData = {};
   devices.forEach(d => {
-    deptsData[d.department] = (deptsData[d.department] || 0) + 1;
+    let chartDept = 'أخرى';
+    if (d.orgPath) {
+      const paths = d.orgPath.split('||');
+      if (paths.length > 2 && paths[0] === 'مجلس الإدارة' && paths[1] === 'المدير العام') {
+         chartDept = paths[2];
+      } else if (paths.length > 1 && paths[0] === 'مجلس الإدارة' && paths[1] !== 'المدير العام') {
+         chartDept = paths[1];
+      } else {
+         chartDept = paths[0] || d.department;
+      }
+    } else {
+      chartDept = d.department;
+    }
+    deptsData[chartDept] = (deptsData[chartDept] || 0) + 1;
   });
   
-  const deptLabels = Object.keys(deptsData);
+  const deptLabels = Object.keys(deptsData).map(translateLabel);
   const deptValues = Object.values(deptsData);
   
   const ctxDept = document.getElementById('deptChart').getContext('2d');
@@ -551,12 +689,12 @@ function renderCharts() {
       cutout: '65%',
       plugins: {
         legend: {
-          position: 'right',
+          position: 'bottom',
           rtl: true,
           labels: {
-            font: { family: "'Cairo', 'Outfit', sans-serif", size: 12, weight: '700' },
+            font: { family: "'Cairo', 'Outfit', sans-serif", size: 11, weight: '700' },
             color: textColor,
-            padding: 15,
+            padding: 10,
             usePointStyle: true,
             pointStyle: 'circle'
           }
@@ -575,7 +713,7 @@ function renderCharts() {
   statusChartInstance = new Chart(ctxStatus, {
     type: 'bar',
     data: {
-      labels: ['سليم', 'به مشاكل تقنية'],
+      labels: [translateLabel('سليم'), translateLabel('به مشاكل تقنية')],
       datasets: [{
         label: 'عدد الأجهزة',
         data: [cleanCount, issueCount],
@@ -706,13 +844,15 @@ function renderComparisons() {
   };
 
   // Helper to generate progress bar HTML
-  const makeBar = (key, title, count, colorClass, iconClass) => {
+  const makeBar = (key, titleKey, count, colorClass, iconClass) => {
     const pct = totalEmployees > 0 ? ((count / totalEmployees) * 100).toFixed(1) : 0;
+    const title = window.t ? window.t(titleKey) : titleKey;
+    const empText = window.t ? (count >= 3 && count <= 10 ? window.t('emp_plural') : window.t('emp_single')) : (count >= 3 && count <= 10 ? 'موظفين' : 'موظف');
     return `
       <div class="comp-card" onclick="showCategoryEmployees('${key}')" title="انقر لعرض قائمة الموظفين" style="cursor: pointer;">
         <div class="comp-info">
           <span class="comp-title"><i class="bi ${iconClass}"></i> ${title}</span>
-          <span class="comp-badge badge-${colorClass}">${count} ${count >= 3 && count <= 10 ? 'موظفين' : 'موظف'} (${pct}%)</span>
+          <span class="comp-badge badge-${colorClass}">${count} ${empText} (${pct}%)</span>
         </div>
         <div class="comp-progress-bg">
           <div class="comp-progress-bar progress-${colorClass}" style="width: ${pct}%"></div>
@@ -722,13 +862,13 @@ function renderComparisons() {
   };
 
   comparisonGrid.innerHTML = `
-    ${makeBar('one_monitor', 'لديه شاشة واحدة', listOneMonitor.length, 'info', 'bi-display')}
-    ${makeBar('two_monitors', 'لديه شاشتان أو أكثر', listTwoMonitors.length, 'success', 'bi-display-fill')}
-    ${makeBar('no_computer', 'لا يملك جهاز كمبيوتر (عهدة أخرى)', listNoComputer.length, 'danger', 'bi-person-x-fill')}
-    ${makeBar('one_computer', 'لديه جهاز كمبيوتر واحد', listOneComputer.length, 'warning', 'bi-laptop')}
-    ${makeBar('two_computers', 'لديه جهازان أو أكثر', listTwoComputers.length, 'primary', 'bi-pc-display-horizontal')}
-    ${makeBar('laptop_and_desktop', 'لديه لابتوب ومكتبي معاً', listLaptopAndDesktop.length, 'secondary', 'bi-arrow-left-right')}
-    ${makeBar('two_laptops', 'لديه لابتوبان أو أكثر', listTwoLaptops.length, 'success', 'bi-laptop-fill')}
+    ${makeBar('one_monitor', 'comp_one_monitor', listOneMonitor.length, 'info', 'bi-display')}
+    ${makeBar('two_monitors', 'comp_two_monitors', listTwoMonitors.length, 'success', 'bi-display-fill')}
+    ${makeBar('no_computer', 'comp_no_pc', listNoComputer.length, 'danger', 'bi-person-x-fill')}
+    ${makeBar('one_computer', 'comp_one_pc', listOneComputer.length, 'warning', 'bi-laptop')}
+    ${makeBar('two_computers', 'comp_two_pcs', listTwoComputers.length, 'primary', 'bi-pc-display-horizontal')}
+    ${makeBar('laptop_and_desktop', 'comp_laptop_desktop', listLaptopAndDesktop.length, 'secondary', 'bi-arrow-left-right')}
+    ${makeBar('two_laptops', 'comp_two_laptops', listTwoLaptops.length, 'success', 'bi-laptop-fill')}
   `;
 }
 
@@ -801,6 +941,12 @@ function applySearchAndFilters() {
   const natureVal = filterNature.value;
   const statusVal = filterStatus.value;
 
+  // Save state to localStorage for persistence
+  localStorage.setItem('ui_search', searchInput.value);
+  localStorage.setItem('ui_dept', deptVal);
+  localStorage.setItem('ui_nature', natureVal);
+  localStorage.setItem('ui_status', statusVal);
+
   filteredDevices = devices.filter(d => {
     // Search filter
     const matchQuery = !query || 
@@ -843,6 +989,23 @@ function applySearchAndFilters() {
   renderTable();
 }
 
+function restoreSearchAndFilters() {
+  const savedSearch = localStorage.getItem('ui_search');
+  if (savedSearch !== null) searchInput.value = savedSearch;
+
+  const savedDept = localStorage.getItem('ui_dept');
+  if (savedDept !== null) {
+    const options = Array.from(filterDept.options).map(o => o.value);
+    if (options.includes(savedDept)) filterDept.value = savedDept;
+  }
+
+  const savedNature = localStorage.getItem('ui_nature');
+  if (savedNature !== null) filterNature.value = savedNature;
+
+  const savedStatus = localStorage.getItem('ui_status');
+  if (savedStatus !== null) filterStatus.value = savedStatus;
+}
+
 // TOAST NOTIFICATIONS
 function showToast(message, isError = false) {
   toastMessage.textContent = message;
@@ -859,8 +1022,88 @@ function showToast(message, isError = false) {
   }, 4000);
 }
 
+// INIT ORG STRUCTURE SELECTS
+function initOrgStructureSelects() {
+  const container = document.getElementById('dynamic-org-container');
+  if (!container) return;
+  renderDynamicOrgDropdowns([""]);
+}
+
+function renderDynamicOrgDropdowns(selectedPathArray) {
+  const container = document.getElementById('dynamic-org-container');
+  const orgPathInput = document.getElementById('orgPath');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  let currentNode = orgStructure;
+  let currentPath = [];
+  
+  for (let i = 0; i < selectedPathArray.length; i++) {
+    const selectedValue = selectedPathArray[i];
+    
+    // Create select element
+    const select = document.createElement('select');
+    select.className = 'dynamic-org-select';
+    select.dataset.level = i;
+    
+    // Default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    const labelNames = ['الجهة الرئيسية', 'التفرع الأول', 'التفرع الثاني', 'التفرع الثالث', 'التفرع الرابع', 'التفرع الخامس'];
+    const label = labelNames[i] || ('التفرع ' + (i+1));
+    defaultOption.textContent = '-- اختر ' + label + ' --';
+    select.appendChild(defaultOption);
+    
+    // Populate options
+    let hasChildren = false;
+    if (currentNode && typeof currentNode === 'object') {
+      Object.keys(currentNode).forEach(key => {
+        hasChildren = true;
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = key;
+        if (key === selectedValue) {
+          option.selected = true;
+        }
+        select.appendChild(option);
+      });
+    }
+    
+    if (hasChildren || i === 0) {
+      container.appendChild(select);
+      
+      select.addEventListener('change', function() {
+        const newSelectedValue = this.value;
+        const newPathArray = selectedPathArray.slice(0, i);
+        if (newSelectedValue) {
+          newPathArray.push(newSelectedValue);
+          // If the newly selected node has children, add an empty selection for the next level
+          let nextNode = orgStructure;
+          for(let p of newPathArray) { nextNode = nextNode[p]; }
+          if (nextNode && typeof nextNode === 'object' && Object.keys(nextNode).length > 0) {
+             newPathArray.push("");
+          }
+        }
+        renderDynamicOrgDropdowns(newPathArray);
+      });
+    }
+    
+    if (selectedValue && currentNode[selectedValue]) {
+      currentPath.push(selectedValue);
+      currentNode = currentNode[selectedValue];
+    } else {
+      break;
+    }
+  }
+  
+  // Update hidden input
+  orgPathInput.value = currentPath.join('||');
+}
+
 // EVENT LISTENERS
 function setupEventListeners() {
+  initOrgStructureSelects();
+  
   // Theme Toggle
   themeToggleBtn.addEventListener('click', toggleTheme);
 
@@ -870,17 +1113,43 @@ function setupEventListeners() {
   filterNature.addEventListener('change', applySearchAndFilters);
   filterStatus.addEventListener('change', applySearchAndFilters);
 
-  // Add Device modal trigger
+  // Form Modals
   openAddModalBtn.addEventListener('click', openAddModal);
 
+  // Employee Auto-Complete Event Listener
+  const empInput = document.getElementById('employeeName');
+  if (empInput) {
+    empInput.addEventListener('input', (e) => {
+      const val = e.target.value.trim();
+      const match = devices.find(d => d.employeeName === val);
+      if (match) {
+        setOrgSelectValue('department', match.department);
+        setOrgSelectValue('circle', match.circle);
+        setOrgSelectValue('section', match.section);
+        setOrgSelectValue('unit', match.unit);
+      }
+    });
+  }
+
   // Add Column modal trigger
-  document.getElementById('openAddColumnModalBtn').addEventListener('click', () => openModal('columnModal'));
+  document.getElementById('openAddColumnModalBtn').addEventListener('click', () => {
+    openModal('columnModal');
+    renderExistingColumns();
+  });
 
   // Form submission
   deviceForm.addEventListener('submit', handleFormSubmit);
 
-  // Add Custom Field trigger inside the form opens the column modal
-  document.getElementById('addCustomFieldBtn').addEventListener('click', () => openModal('columnModal'));
+  // Add Custom Field triggers inside the form opens the column modal
+  document.querySelectorAll('.addCustomFieldBtn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const section = e.currentTarget.getAttribute('data-section');
+      const targetSectionInput = document.getElementById('targetSection');
+      if (targetSectionInput) targetSectionInput.value = section;
+      openModal('columnModal');
+      renderExistingColumns();
+    });
+  });
 
   // Column form submission
   document.getElementById('columnForm').addEventListener('submit', handleColumnSubmit);
@@ -936,12 +1205,47 @@ function closeModal(modalId) {
   }, 250);
 }
 
+// HELPER TO SET ORG SELECT VALUE AND TRIGGER CASCADING
+function setOrgSelectValue(pathString) {
+  if (!pathString) {
+    renderDynamicOrgDropdowns([""]);
+    return;
+  }
+  let pathArray = pathString.split('||');
+  
+  // Check if the last node has children, if so, append empty string to show next dropdown
+  let nextNode = orgStructure;
+  let validPath = [];
+  for(let p of pathArray) { 
+    if (nextNode && nextNode[p]) {
+      validPath.push(p);
+      nextNode = nextNode[p]; 
+    } else {
+      break;
+    }
+  }
+  
+  if (nextNode && typeof nextNode === 'object' && Object.keys(nextNode).length > 0) {
+    validPath.push("");
+  }
+  
+  renderDynamicOrgDropdowns(validPath);
+}
+
 // ADD DEVICE MODAL
 function openAddModal() {
   document.getElementById('modalTitle').textContent = 'إضافة جهاز جديد';
   document.getElementById('deviceId').value = '';
   deviceForm.reset();
+  
+  // Reset org dropdowns
+  setOrgSelectValue('');
+
   document.getElementById('technicalStatus').value = 'سليم';
+  document.getElementById('assetType').value = 'Computer';
+  document.getElementById('deviceNature').value = 'Desktop';
+  document.getElementById('connectionType').value = 'USB';
+  toggleDeviceFields();
   renderFormCustomFields(null);
   openModal('deviceModal');
 }
@@ -955,11 +1259,28 @@ function openEditModal(id) {
   document.getElementById('deviceId').value = d.id;
   
   document.getElementById('employeeName').value = d.employeeName || '';
-  document.getElementById('department').value = d.department || '';
-  document.getElementById('section').value = d.section || '';
-  document.getElementById('unit').value = d.unit || '';
+  document.getElementById('employeeId').value = d.employeeId || '';
   
-  document.getElementById('deviceNature').value = d.deviceNature || 'Desktop';
+  setOrgSelectValue(d.orgPath);
+  
+  if (d.deviceNature === 'Printer') {
+    document.getElementById('assetType').value = 'Printer';
+    document.getElementById('deviceNature').value = 'Desktop';
+  } else if (d.deviceNature === 'Fingerprint') {
+    document.getElementById('assetType').value = 'Fingerprint';
+    document.getElementById('deviceNature').value = 'Desktop';
+  } else if (d.deviceNature === 'AccessPoint') {
+    document.getElementById('assetType').value = 'AccessPoint';
+    document.getElementById('deviceNature').value = 'Desktop';
+  } else if (d.deviceNature === 'None') {
+    document.getElementById('assetType').value = 'None';
+    document.getElementById('deviceNature').value = 'Desktop';
+  } else {
+    document.getElementById('assetType').value = 'Computer';
+    document.getElementById('deviceNature').value = d.deviceNature || 'Desktop';
+  }
+  document.getElementById('connectionType').value = d.connectionType || 'USB';
+  document.getElementById('ipAddress').value = d.ipAddress || '';
   document.getElementById('deviceModel').value = d.deviceModel || '';
   document.getElementById('serviceTag').value = d.serviceTag || '';
   document.getElementById('ram').value = d.ram || '';
@@ -967,6 +1288,7 @@ function openEditModal(id) {
   document.getElementById('storageSize').value = d.storageSize || '';
   document.getElementById('monitorsCount').value = d.monitorsCount || 1;
   document.getElementById('phone').value = d.phone || '';
+  document.getElementById('osVersion').value = d.osVersion || '';
   
   document.getElementById('systemsUsed').value = d.systemsUsed || '';
   document.getElementById('recurringIssues').value = d.recurringIssues || '';
@@ -976,6 +1298,7 @@ function openEditModal(id) {
   // Load custom fields
   renderFormCustomFields(d);
 
+  toggleDeviceFields();
   openModal('deviceModal');
 }
 
@@ -1006,17 +1329,19 @@ async function handleFormSubmit(e) {
   
   const payload = {
     employeeName: document.getElementById('employeeName').value.trim(),
-    department: document.getElementById('department').value.trim(),
-    section: document.getElementById('section').value.trim(),
-    unit: document.getElementById('unit').value.trim(),
-    deviceNature: document.getElementById('deviceNature').value,
+    employeeId: document.getElementById('employeeId').value.trim(),
+    orgPath: document.getElementById('orgPath').value.trim(),
+    deviceNature: document.getElementById('assetType').value === 'Computer' ? document.getElementById('deviceNature').value : document.getElementById('assetType').value,
     deviceModel: document.getElementById('deviceModel').value.trim(),
     serviceTag: document.getElementById('serviceTag').value.trim(),
     ram: document.getElementById('ram').value.trim(),
     storageType: document.getElementById('storageType').value,
     storageSize: document.getElementById('storageSize').value.trim(),
     monitorsCount: parseInt(document.getElementById('monitorsCount').value) || 1,
+    connectionType: document.getElementById('connectionType').value,
+    ipAddress: document.getElementById('ipAddress').value.trim(),
     phone: document.getElementById('phone').value.trim(),
+    osVersion: document.getElementById('osVersion').value.trim(),
     systemsUsed: document.getElementById('systemsUsed').value.trim(),
     recurringIssues: document.getElementById('recurringIssues').value.trim(),
     notes: document.getElementById('notes').value.trim(),
@@ -1090,27 +1415,39 @@ function viewDeviceDetails(id) {
     systemsHtml = `<span class="sys-pill" style="color: var(--text-muted)">لا توجد أنظمة خاصة مسجلة</span>`;
   }
 
-  // Custom fields formatting
-  let customFieldsHtml = '';
-  if (d.customFields && Array.isArray(d.customFields) && d.customFields.length > 0) {
-    customFieldsHtml = `
-      <div class="tech-section full-width">
-        <h5>بيانات مخصصة إضافية</h5>
-        <div class="tech-detail-grid">
-    `;
-    d.customFields.forEach(cf => {
-      customFieldsHtml += `
-        <div class="tech-item">
-          <span class="tech-label">${cf.label}:</span>
-          <span class="tech-val">${cf.value}</span>
-        </div>
-      `;
-    });
-    customFieldsHtml += `
-        </div>
+  // Custom fields logic per section
+  const getCustomFieldsHtmlBySection = (sectionName) => {
+    if (!d.customFields || !Array.isArray(d.customFields)) return '';
+    const sectionCols = customColumns.filter(c => c.section === sectionName).map(c => c.name);
+    
+    // Fallback: any column not explicitly defined goes to 'specs'
+    const legacyKeys = [];
+    if (sectionName === 'specs') {
+       const allKnownCols = new Set(customColumns.map(c => c.name));
+       d.customFields.forEach(cf => {
+         if (!allKnownCols.has(cf.label)) legacyKeys.push(cf.label);
+       });
+    }
+
+    const fieldsToShow = d.customFields.filter(cf => sectionCols.includes(cf.label) || legacyKeys.includes(cf.label));
+    
+    if (fieldsToShow.length === 0) return '';
+    
+    return `
+      <div class="tech-detail-grid" style="margin-top: 10px; border-top: 1px dashed var(--border-color); padding-top: 10px;">
+        ${fieldsToShow.map(cf => `
+          <div class="tech-item" style="flex: 1 1 100%;">
+            <span class="tech-label" style="color: var(--color-primary)">${cf.label}:</span>
+            <span class="tech-val">${cf.value}</span>
+          </div>
+        `).join('')}
       </div>
     `;
-  }
+  };
+
+  const customFieldsEmployeeHtml = getCustomFieldsHtmlBySection('employee');
+  const customFieldsSpecsHtml = getCustomFieldsHtmlBySection('specs');
+  const customFieldsNotesHtml = getCustomFieldsHtmlBySection('notes');
 
   // Issue card display
   const issuesHtml = hasIssues
@@ -1140,7 +1477,7 @@ function viewDeviceDetails(id) {
       <div class="tech-card-header">
         <div class="tech-card-title">
           <h4>بطاقة مواصفات العهدة التقنية</h4>
-          <span>اسم الموظف: ${d.employeeName}</span>
+          <span>اسم الموظف: ${d.employeeName} ${d.employeeId ? ' (' + d.employeeId + ')' : ''}</span>
         </div>
         <div class="tech-card-badge">ID: #${d.id}</div>
       </div>
@@ -1151,11 +1488,10 @@ function viewDeviceDetails(id) {
           <div class="tech-section">
             <h5>بيانات الجهة والموظف</h5>
             <div class="tech-detail-grid">
-              <div class="tech-item"><span class="tech-label">الإدارة:</span> <span class="tech-val">${d.department}</span></div>
-              <div class="tech-item"><span class="tech-label">القسم:</span> <span class="tech-val">${d.section || 'لا يوجد'}</span></div>
-              <div class="tech-item"><span class="tech-label">الوحدة:</span> <span class="tech-val">${d.unit || 'لا يوجد'}</span></div>
-              <div class="tech-item"><span class="tech-label">المستلم:</span> <span class="tech-val">${d.employeeName}</span></div>
+              <div class="tech-item" style="grid-column: 1 / -1;"><span class="tech-label">مكان الوظيفة:</span> <span class="tech-val">${d.orgPath ? d.orgPath.split('||').join(' <i class="bi bi-chevron-left" style="font-size:0.75rem;margin:0 4px;"></i> ') : 'لا يوجد'}</span></div>
+              <div class="tech-item"><span class="tech-label">المستلم:</span> <span class="tech-val">${d.employeeName} ${d.employeeId ? ' (' + d.employeeId + ')' : ''}</span></div>
             </div>
+            ${customFieldsEmployeeHtml}
           </div>
 
           <!-- القسم الثاني: مواصفات الجهاز -->
@@ -1169,16 +1505,31 @@ function viewDeviceDetails(id) {
               <div class="tech-item"><span class="tech-label">عدد الشاشات:</span> <span class="tech-val">${d.monitorsCount} شاشات</span></div>
               <div class="tech-item"><span class="tech-label">Service Tag:</span> <span class="tech-val"><code>${d.serviceTag}</code></span></div>
             </div>
+            ${customFieldsSpecsHtml}
           </div>
 
-          <!-- الهاتف -->
+          <!-- الهاتف ونظام التشغيل -->
           <div class="tech-section full-width">
-            <h5>بيانات الاتصال والملحقات الفنية</h5>
+            <h5>بيانات الاتصال ونظام التشغيل</h5>
             <div class="tech-detail-grid">
-              <div class="tech-item" style="grid-column: span 2;">
+              <div class="tech-item">
                 <span class="tech-label">الهاتف الأرضي / Cisco IP Phone:</span>
                 <span class="tech-val" style="color: var(--color-primary)">${d.phone || 'لا يوجد'}</span>
               </div>
+              <div class="tech-item">
+                <span class="tech-label">نظام التشغيل (OS):</span>
+                <span class="tech-val" style="color: var(--color-primary)">${d.osVersion || 'لا يوجد'}</span>
+              </div>
+              <div class="tech-item">
+                <span class="tech-label">طريقة التوصيل:</span>
+                <span class="tech-val">${d.connectionType === 'Network' ? 'شبكة سلكية' : d.connectionType === 'Wireless' ? 'شبكة لاسلكية' : 'USB'}</span>
+              </div>
+              ${d.ipAddress ? `
+              <div class="tech-item">
+                <span class="tech-label">عنوان الـ IP:</span>
+                <span class="tech-val" style="color: var(--color-primary); font-family: monospace;">${d.ipAddress}</span>
+              </div>
+              ` : ''}
             </div>
           </div>
 
@@ -1190,13 +1541,11 @@ function viewDeviceDetails(id) {
             </div>
           </div>
 
-          <!-- البيانات المخصصة الإضافية -->
-          ${customFieldsHtml}
-
           <!-- الملاحظات العامة -->
           <div class="tech-section full-width">
             <h5>الملاحظات العامة</h5>
             ${notesHtml}
+            ${customFieldsNotesHtml}
           </div>
 
           <!-- الأعطال والمشاكل -->
@@ -1260,6 +1609,101 @@ async function handleImportSubmit(e) {
     startImportBtn.textContent = 'ابدأ الاستيراد';
   }
 }
+function renderExistingColumns() {
+  const list = document.getElementById('existingColumnsList');
+  if (!list) return;
+  list.innerHTML = '';
+  
+  const targetSectionInput = document.getElementById('targetSection');
+  const currentSection = targetSectionInput ? targetSectionInput.value : 'specs';
+
+  const colsForSection = customColumns ? customColumns.filter(c => c.section === currentSection || (!c.section && currentSection === 'specs')) : [];
+
+  if (colsForSection.length === 0) {
+    list.innerHTML = `<li style="color: var(--text-muted); font-size: 0.85rem; text-align: center;">لا توجد حقول مخصصة في هذا القسم.</li>`;
+    return;
+  }
+
+  colsForSection.forEach(col => {
+    const li = document.createElement('li');
+    li.style.display = 'flex';
+    li.style.justifyContent = 'space-between';
+    li.style.alignItems = 'center';
+    li.style.padding = '0.4rem 0';
+    li.style.borderBottom = '1px solid var(--border-color)';
+    
+    const nameSpan = document.createElement('span');
+    nameSpan.textContent = col.name;
+    
+    const actionsDiv = document.createElement('div');
+    actionsDiv.style.display = 'flex';
+    actionsDiv.style.gap = '0.5rem';
+    
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'action-btn icon-btn';
+    editBtn.innerHTML = '<i class="bi bi-pencil-square" style="color: var(--primary-color);"></i>';
+    editBtn.title = 'تعديل الحقل';
+    editBtn.onclick = () => editColumn(col.id, col.name);
+    
+    const delBtn = document.createElement('button');
+    delBtn.type = 'button';
+    delBtn.className = 'action-btn icon-btn';
+    delBtn.innerHTML = '<i class="bi bi-trash" style="color: var(--danger-color);"></i>';
+    delBtn.title = 'حذف الحقل';
+    delBtn.onclick = () => deleteColumn(col.id, col.name);
+    
+    actionsDiv.appendChild(editBtn);
+    actionsDiv.appendChild(delBtn);
+    
+    li.appendChild(nameSpan);
+    li.appendChild(actionsDiv);
+    list.appendChild(li);
+  });
+}
+
+async function editColumn(id, currentName) {
+  const newName = prompt('أدخل الاسم الجديد للحقل:', currentName);
+  if (!newName || newName.trim() === '' || newName.trim() === currentName) return;
+
+  try {
+    const res = await fetch(`/api/columns/${id}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newName.trim() })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'فشل تعديل الحقل');
+    
+    showToast('تم تعديل الحقل بنجاح!');
+    await fetchCustomColumns();
+    renderExistingColumns();
+    fetchDevices();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
+async function deleteColumn(id, name) {
+  if (!confirm(`هل أنت متأكد من رغبتك في حذف الحقل "${name}" نهائياً؟
+سيتم إزالة هذا الحقل من جميع الأجهزة المرتبطة به!`)) return;
+
+  try {
+    const res = await fetch(`/api/columns/${id}`, {
+      method: 'DELETE'
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'فشل حذف الحقل');
+    
+    showToast('تم حذف الحقل بنجاح!');
+    await fetchCustomColumns();
+    renderExistingColumns();
+    fetchDevices();
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+
 
 async function handleColumnSubmit(e) {
   e.preventDefault();
@@ -1272,10 +1716,13 @@ async function handleColumnSubmit(e) {
   saveBtn.textContent = 'جاري الإضافة...';
 
   try {
+    const targetSectionInput = document.getElementById('targetSection');
+    const section = targetSectionInput ? targetSectionInput.value : 'specs';
+
     const res = await fetch('/api/columns', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name })
+      body: JSON.stringify({ name, section })
     });
 
     const result = await res.json();
@@ -1283,10 +1730,10 @@ async function handleColumnSubmit(e) {
 
     showToast('تم إضافة العمود المخصص بنجاح!');
     nameInput.value = '';
-    closeModal('columnModal');
     
     // Reload state
-    await fetchCustomColumns();
+    customColumns = result;
+    renderExistingColumns();
     
     // If the deviceModal is open, re-render the custom fields in it
     const isDeviceModalOpen = document.getElementById('deviceModal').style.display === 'flex' || 
@@ -1313,7 +1760,7 @@ async function handleColumnSubmit(e) {
 
 // CUSTOM FIELDS HELPERS
 function getUniqueCustomKeys() {
-  const keys = [...customColumns];
+  const keys = [...customColumns.map(c => c.name)];
   devices.forEach(d => {
     if (d.customFields && Array.isArray(d.customFields)) {
       d.customFields.forEach(cf => {
@@ -1327,21 +1774,46 @@ function getUniqueCustomKeys() {
 }
 
 function renderFormCustomFields(device = null) {
-  const container = document.getElementById('customFieldsContainer');
-  container.innerHTML = '';
-  const keys = getUniqueCustomKeys();
+  const containers = {
+    employee: document.getElementById('customFields_employee'),
+    specs: document.getElementById('customFields_specs'),
+    notes: document.getElementById('customFields_notes')
+  };
   
-  if (keys.length === 0) {
-    container.innerHTML = `
-      <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 0.5rem; border: 1px dashed var(--border-color); border-radius: var(--border-radius-sm);">
-        لا توجد حقول إضافية حالياً. اضغط على أيقونة (+) لإنشاء حقل مخصص جديد للمنظومة.
-      </div>
-    `;
+  // Clear all
+  Object.values(containers).forEach(c => {
+    if(c) c.innerHTML = '';
+  });
+
+  const keysSet = new Set(customColumns.map(c => c.name));
+  let legacyKeys = [];
+  
+  if (device && device.customFields && Array.isArray(device.customFields)) {
+    device.customFields.forEach(cf => {
+      if (cf.label && !keysSet.has(cf.label)) {
+        legacyKeys.push(cf.label);
+      }
+    });
+  }
+
+  const allColumns = [
+    ...customColumns, 
+    ...legacyKeys.map(k => ({ name: k, section: 'specs' }))
+  ];
+
+  if (allColumns.length === 0) {
+    if (containers.specs) {
+      containers.specs.innerHTML = `
+        <div style="color: var(--text-muted); font-size: 0.85rem; text-align: center; padding: 0.5rem; border: 1px dashed var(--border-color); border-radius: var(--border-radius-sm);">
+          لا توجد حقول إضافية حالياً. اضغط على أيقونة (+) لإنشاء حقل مخصص.
+        </div>
+      `;
+    }
     return;
   }
-  
-  keys.forEach(key => {
-    const field = device && device.customFields ? device.customFields.find(cf => cf.label === key) : null;
+
+  allColumns.forEach(col => {
+    const field = device && device.customFields ? device.customFields.find(cf => cf.label === col.name) : null;
     const value = field ? field.value : '';
     
     const row = document.createElement('div');
@@ -1351,9 +1823,266 @@ function renderFormCustomFields(device = null) {
     row.style.gap = '0.4rem';
     
     row.innerHTML = `
-      <label>${key}</label>
-      <input type="text" class="custom-field-value-input" data-label="${key}" placeholder="القيمة..." value="${value}">
+      <label>${col.name}</label>
+      <input type="text" class="custom-field-value-input" data-label="${col.name}" placeholder="القيمة..." value="${value}">
     `;
-    container.appendChild(row);
+    
+    const targetContainer = containers[col.section] || containers.specs;
+    if (targetContainer) targetContainer.appendChild(row);
   });
+}
+
+// Re-render when language changes
+window.addEventListener('languageChanged', () => {
+  if (typeof renderTable === 'function') renderTable();
+  if (typeof updateStats === 'function') updateStats();
+  if (typeof renderCharts === 'function') renderCharts();
+  if (typeof renderComparisons === 'function') renderComparisons();
+});
+
+
+async function viewDeviceHistory(id) {
+  try {
+    const res = await fetch(`/api/devices/${id}/history`);
+    if (!res.ok) throw new Error('Failed to fetch history');
+    const history = await res.json();
+    const tbody = document.getElementById('historyTableBody');
+    if (history.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="4" style="text-align: center" data-i18n="history_empty">لا توجد حركات سابقة لهذا الجهاز</td></tr>`;
+    } else {
+      let periodsHtml = '';
+      let returnDate = 'الآن (العهدة الحالية)';
+      
+      // We assume history is sorted by timestamp DESC
+      history.forEach((h, index) => {
+         const receiveDate = new Date(h.timestamp).toLocaleString('ar-LY');
+         
+         // Current owner (h.new_employee) period (only rendered on the first iteration which is the latest movement)
+         if (index === 0) {
+             periodsHtml += `
+             <tr>
+               <td><strong style="color:var(--primary-color)">${h.new_employee || '-'}</strong></td>
+               <td><strong style="color:var(--primary-color)">${h.new_department || '-'} / ${h.new_section || '-'}</strong></td>
+               <td>${receiveDate}</td>
+               <td><span class="badge badge-success">${returnDate}</span></td>
+             </tr>`;
+         }
+         
+         returnDate = receiveDate;
+         const prevReceiveDate = index < history.length - 1 ? new Date(history[index+1].timestamp).toLocaleString('ar-LY') : (window.t ? window.t('history_unknown') : 'غير معروف (أول استلام)');
+         
+         periodsHtml += `
+             <tr>
+               <td>${h.previous_employee || '-'}</td>
+               <td>${h.previous_department || '-'} / ${h.previous_section || '-'}</td>
+               <td>${prevReceiveDate}</td>
+               <td>${returnDate}</td>
+             </tr>`;
+      });
+      tbody.innerHTML = periodsHtml;
+    }
+    // Apply translations if i18n loaded
+    if (window.applyTranslations) window.applyTranslations();
+    openModal('historyModal');
+  } catch(e) {
+    showToast(e.message, true);
+  }
+}
+
+function toggleDeviceFields() {
+  const assetType = document.getElementById('assetType').value;
+  const pcFields = document.querySelectorAll('.pc-only-fields');
+  const computerOnlyFields = document.querySelectorAll('.computer-only-fields');
+  const printerFields = document.querySelectorAll('.printer-only-fields');
+  const generalDeviceFields = document.querySelectorAll('.general-device-field');
+  const sharedBtn = document.getElementById('sharedPrinterBtn');
+  
+  if (assetType === 'Printer' || assetType === 'Fingerprint' || assetType === 'AccessPoint') {
+    pcFields.forEach(el => el.style.display = 'none');
+    computerOnlyFields.forEach(el => el.style.display = 'none');
+    generalDeviceFields.forEach(el => el.style.display = 'block');
+    printerFields.forEach(el => el.style.display = 'block'); // Shows connectionType which applies to all these
+    if (sharedBtn) sharedBtn.style.display = assetType === 'Printer' ? 'block' : 'none';
+  } else if (assetType === 'None') {
+    pcFields.forEach(el => el.style.display = 'none');
+    computerOnlyFields.forEach(el => el.style.display = 'none');
+    generalDeviceFields.forEach(el => el.style.display = 'none');
+    printerFields.forEach(el => el.style.display = 'none');
+    if (sharedBtn) sharedBtn.style.display = 'none';
+  } else {
+    pcFields.forEach(el => el.style.display = 'block');
+    computerOnlyFields.forEach(el => el.style.display = 'block');
+    generalDeviceFields.forEach(el => el.style.display = 'block');
+    printerFields.forEach(el => el.style.display = 'none');
+    if (sharedBtn) sharedBtn.style.display = 'none';
+  }
+  toggleIpAddressField();
+}
+
+function toggleIpAddressField() {
+  const assetType = document.getElementById('assetType').value;
+  const connectionType = document.getElementById('connectionType').value;
+  const ipGroup = document.getElementById('ipAddressGroup');
+  
+  if ((assetType === 'Printer' || assetType === 'Fingerprint' || assetType === 'AccessPoint') && 
+      (connectionType === 'Network' || connectionType === 'Wireless')) {
+    if (ipGroup) ipGroup.style.display = 'block';
+  } else {
+    if (ipGroup) ipGroup.style.display = 'none';
+  }
+}
+
+function translateLabel(arabicLabel) {
+  if (typeof window.t !== 'function') return arabicLabel;
+  const map = {
+    'التجارية': 'dept_commercial',
+    'مجلس الإدارة': 'dept_board',
+    'المدير العام': 'dept_gm',
+    'إدارة الموارد': 'dept_hr',
+    'الإدارة المالية': 'dept_finance',
+    'الإدارة التجارية': 'dept_comm_dept',
+    'الإدارة الفنية': 'dept_tech',
+    'إدارة تقنية المعلومات': 'dept_it',
+    'إدارة الخدمات': 'dept_services',
+    'لا يوجد': 'dept_none',
+    'الإدارة الهندسية': 'dept_engineering',
+    'إدارة المشتريات': 'dept_purchasing',
+    'التسويق والمبيعات': 'dept_marketing_sales',
+    'إدارة العمليات': 'dept_operations',
+    'الإدارة القانونية': 'dept_legal',
+    'المراجعة الداخلية': 'dept_internal_audit',
+    'خدمات المشتركين': 'dept_customer_service',
+    'الموارد البشرية': 'dept_hr',
+    'الدعم التجاري': 'sec_commercial_support',
+    'قسم الاتصالات': 'sec_communications',
+    'قسم المشتريات الخارجية': 'sec_foreign_purchasing',
+    'قسم التسويق الرقمي': 'sec_digital_marketing',
+    'قسم الصيانة': 'sec_maintenance',
+    'قسم الاستشارات': 'sec_consulting',
+    'قسم تطوير البرمجيات': 'sec_software_dev',
+    'قسم المشتريات المحلية': 'sec_local_purchasing',
+    'قسم المراجعة الإدارية': 'sec_admin_audit',
+    'قسم التشغيل': 'sec_operations',
+    'قسم البنية التحتية': 'sec_infrastructure',
+    'قسم الطاقة': 'sec_power',
+    'قسم الشبكات': 'sec_networks',
+    'قسم الدعم': 'sec_support',
+    'قسم الدعم الفني': 'sec_tech_support',
+    'قسم التحقيقات': 'sec_investigations',
+    'قسم المخازن': 'sec_stores',
+    'قسم العلاقات العامة': 'sec_pr',
+    'قسم المراجعة المالية': 'sec_finance_audit',
+    'قسم العقود': 'sec_contracts',
+    'قسم المبيعات المباشرة': 'sec_direct_sales',
+    'قسم التوظيف': 'sec_recruitment',
+    'قسم التخطيط': 'sec_planning',
+    'قسم الحسابات': 'sec_accounts',
+    'قسم التدريب': 'sec_training',
+    'قسم الشكاوى': 'sec_complaints',
+    'قسم الخزينة': 'sec_treasury',
+    'قسم الميزانية': 'sec_budget',
+    'قسم شؤون الموظفين': 'sec_personnel',
+    'قسم الجودة': 'sec_quality',
+    'دعم وتحليل المنتجات': 'unit_product_support',
+    'لا يوجد': 'dept_no_dept',
+    'بدون وحدة': 'dept_no_unit',
+    'سليم': 'status_clean',
+    'به مشاكل تقنية': 'status_issues'
+  };
+  const key = map[arabicLabel];
+  if (key) return window.t(key);
+  return arabicLabel;
+}
+
+/* Org Tree Picker Logic */
+window.openOrgTreeModal = function() { 
+  renderOrgTree();
+  openModal('orgTreeModal');
+}
+
+function renderOrgTree() {
+  const container = document.getElementById('orgTreeContainer');
+  container.innerHTML = '';
+  const ul = document.createElement('ul');
+  ul.className = 'org-tree-list root-list';
+  
+  function buildNode(data, parentUl, path) {
+    if (!data || typeof data !== 'object') return;
+    
+    Object.keys(data).forEach(key => {
+      const li = document.createElement('li');
+      li.className = 'org-tree-item';
+      
+      const currentPath = path.length > 0 ? path.join('||') + '||' + key : key;
+      const hasChildren = Object.keys(data[key]).length > 0;
+      
+      if (!hasChildren) {
+         li.innerHTML = `<div class="org-tree-node" onclick="selectOrgPath('${currentPath}')" style="display: flex; justify-content: space-between; width: 100%;">
+           <span><i class="bi bi-check2-circle"></i> ${key}</span>
+           <button class="action-btn btn-success" style="padding: 2px 8px; font-size: 0.8rem;">اختيار</button>
+         </div>`;
+      } else {
+         const btnId = 'tree-' + Math.random().toString(36).substr(2, 9);
+         const contentId = 'content-' + btnId;
+         li.innerHTML = `
+           <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+             <button class="org-tree-toggle" onclick="toggleOrgTree('${btnId}', '${contentId}')" id="${btnId}" style="flex: 1; text-align: right;">
+               <i class="bi bi-chevron-left org-tree-icon"></i> ${key}
+             </button>
+             <button class="action-btn btn-primary" onclick="selectOrgPath('${currentPath}')" style="padding: 2px 8px; font-size: 0.8rem;" title="اختيار هذا المستوى">اختيار</button>
+           </div>
+           <ul class="org-tree-list org-tree-children" id="${contentId}"></ul>
+         `;
+      }
+      parentUl.appendChild(li);
+      if (hasChildren) {
+        buildNode(data[key], li.querySelector('.org-tree-children'), [...path, key]);
+      }
+    });
+  }
+  
+  buildNode(orgStructure, ul, []);
+  container.appendChild(ul);
+}
+
+window.toggleOrgTree = function(btnId, contentId) {
+  const btn = document.getElementById(btnId);
+  const content = document.getElementById(contentId);
+  const icon = btn.querySelector('.org-tree-icon');
+  if (content.classList.contains('open')) {
+    content.classList.remove('open');
+    icon.classList.remove('open');
+  } else {
+    content.classList.add('open');
+    icon.classList.add('open');
+  }
+}
+
+window.selectOrgPath = function(pathStr) {
+  const path = pathStr.split('||');
+  setOrgSelectValue('department', path[0] || '');
+  document.getElementById('department').dispatchEvent(new Event('change'));
+  
+  if (path[1]) {
+    setOrgSelectValue('circle', path[1]);
+    document.getElementById('circle').dispatchEvent(new Event('change'));
+  } else {
+    setOrgSelectValue('circle', '');
+    document.getElementById('circle').dispatchEvent(new Event('change'));
+  }
+  
+  if (path[2]) {
+    setOrgSelectValue('section', path[2]);
+    document.getElementById('section').dispatchEvent(new Event('change'));
+  } else {
+    setOrgSelectValue('section', '');
+    document.getElementById('section').dispatchEvent(new Event('change'));
+  }
+  
+  if (path[3]) {
+    setOrgSelectValue('unit', path[3]);
+  } else {
+    setOrgSelectValue('unit', '');
+  }
+  closeModal('orgTreeModal');
 }

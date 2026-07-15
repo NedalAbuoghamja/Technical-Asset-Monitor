@@ -457,7 +457,7 @@ body.light-theme {
 }
 
 .chart-body {
-  height: 260px;
+  min-height: 320px;
   position: relative;
   display: flex;
   align-items: center;
@@ -1497,31 +1497,89 @@ body.light-theme {
 
 /* Print Styles */
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: A4 portrait;
+    margin: 1.5cm;
   }
-  #detailsModal, #detailsModal * {
-    visibility: visible;
+  
+  html, body {
+    background: white !important;
+    color: black !important;
+    display: block !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
+    height: auto !important;
   }
-  #detailsModal {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: auto;
-    background: none;
-    backdrop-filter: none;
-  }
-  .modal-header button, .modal-footer {
+
+  /* Hide absolutely everything else */
+  body > *:not(#detailsModal) {
     display: none !important;
   }
-  .detail-modal-content {
+  
+  .app-container, .bg-blobs, .modal:not(#detailsModal) {
+    display: none !important;
+  }
+
+  /* Reset the modal and make it take full page flow */
+  #detailsModal {
+    position: static !important;
+    display: block !important;
+    background: white !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .modal-content, .detail-modal-content {
+    position: static !important;
     border: none !important;
     box-shadow: none !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100% !important;
     max-width: 100% !important;
+    transform: none !important;
+    display: block !important;
+  }
+
+  .tech-card {
+    border: 2px solid #ccc !important;
+    border-radius: 8px !important;
+    box-shadow: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  /* Hide unnecessary modal elements */
+  .modal-header, .modal-footer, .print-btn {
+    display: none !important;
+  }
+
+  /* Enforce grid layouts against mobile overrides in print */
+  .tech-card-sections {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1.5rem !important;
+    width: 100% !important;
+  }
+
+  .tech-detail-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 1rem !important;
     width: 100% !important;
   }
 }
+
+
 
 /* User Session & Authentication styles (2026 UI Upgrade) */
 .user-session-info {
@@ -1955,3 +2013,19 @@ body.is-admin table tr.admin-only-row {
     font-size: 0.95rem;
   }
 }
+
+
+/* Org Tree Styles */
+.org-tree-container { margin: 1rem 0; text-align: right; direction: rtl; }
+.org-tree-list { list-style: none; padding-right: 20px; }
+.org-tree-list.root-list { padding-right: 0; }
+.org-tree-item { margin: 8px 0; }
+.org-tree-toggle { cursor: pointer; display: inline-flex; align-items: center; gap: 8px; font-weight: 600; color: var(--primary-color); user-select: none; background: transparent; border: none; font-size: 1rem; padding: 6px 12px; outline: none; border-radius: 6px; transition: all 0.2s; }
+.org-tree-toggle:hover { color: var(--accent-color); }
+.org-tree-node { cursor: pointer; padding: 6px 12px; border-radius: 6px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s; color: var(--text-color); font-size: 0.95rem; }
+.org-tree-node:hover { background: var(--hover-color); color: var(--accent-color); }
+.org-tree-icon { font-size: 0.9rem; transition: transform 0.3s; width: 16px; text-align: center; }
+.org-tree-icon.open { transform: rotate(-90deg); }
+.org-tree-children { display: none; margin-top: 5px; border-right: 1px dashed var(--border-color); }
+.org-tree-children.open { display: block; }
+.org-tree-badge { font-size: 0.7rem; background: var(--bg-color); border: 1px solid var(--border-color); padding: 2px 8px; border-radius: 12px; color: var(--text-color); margin-right: 10px; }

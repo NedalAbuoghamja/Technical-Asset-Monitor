@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>منظومة حصر ومتابعة الأجهزة والأنظمة</title>
+  <title>مراقب الأصول التقنية / Technical Asset Monitor</title>
   <!-- Google Fonts: Cairo & Outfit -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,7 +11,14 @@
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
   <!-- Custom Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=1784113485416">
+  <!-- Microsoft/Corporate UI Override -->
+  <link rel="stylesheet" href="css/corporate-ui.css?v=2">
+  <!-- Translations & Initialization -->
+  <script src="js/i18n.js?v=19" defer></script>
+  
+  <!-- Main Logic -->
+  <script src="js/app.js?v=29" defer></script>
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -30,32 +37,56 @@
           <i class="bi bi-cpu-fill"></i>
         </div>
         <div class="logo-text">
-          <h1>منظومة حصر الأجهزة</h1>
-          <p>المرجع التقني لقسم نظم المعلومات والأمن السيبراني</p>
+          <h1>مراقب الأصول التقنية</h1>
+          <p>Technical Asset Monitor</p>
         </div>
       </div>
       
       <div class="header-actions">
         <div id="userSessionInfo" class="user-session-info" style="display: none;">
+          <script>
+// INITIALIZATION
+document.addEventListener('DOMContentLoaded', async () => {
+  const table = document.getElementById('devicesTableBody');
+  if (table) table.innerHTML = `<tr><td colspan="8">DEBUG 1: DOMContentLoaded started</td></tr>`;
+  initTheme();
+  
+  // Verify user session
+  if (table) table.innerHTML = `<tr><td colspan="8">DEBUG 2: checkAuth started</td></tr>`;
+  const authenticated = await checkAuth();
+  if (!authenticated) return;
+  
+  if (table) table.innerHTML = `<tr><td colspan="8">DEBUG 3: initUserInterface started</td></tr>`;
+  initUserInterface();
+  setupUserManagement();
+  if (table) table.innerHTML = `<tr><td colspan="8">DEBUG 4: fetchCustomColumns started</td></tr>`;
+  await fetchCustomColumns();
+  if (table) table.innerHTML = `<tr><td colspan="8">DEBUG 5: fetchDevices started</td></tr>`;
+  fetchDevices();
+  setupEventListeners();
+  setupRealTimeUpdates();
+});
+          </script>
           <span class="user-role-badge" id="userRoleBadge"></span>
           <span class="user-name-text" id="userNameText"></span>
-          <button id="openUserManagementBtn" class="action-btn circle-btn admin-only-element" title="إدارة المستخدمين">
+          <button id="openUserManagementBtn" class="action-btn circle-btn admin-only-element" title="إدارة المستخدمين" data-i18n-title="user_management">
             <i class="bi bi-people-fill"></i>
           </button>
-          <button id="logoutBtn" class="action-btn circle-btn btn-danger-outline" title="تسجيل الخروج">
+          <button id="logoutBtn" class="action-btn circle-btn btn-danger-outline" title="تسجيل الخروج" data-i18n-title="logout">
             <i class="bi bi-box-arrow-right"></i>
           </button>
         </div>
+        <button id="langToggleBtn" onclick="if(window.toggleLanguage) window.toggleLanguage(); return false;" class="action-btn circle-btn" title="تغيير اللغة"><i class="bi bi-translate"></i><span id="langToggleText" style="display:none" data-i18n="toggle_lang">English</span></button>
         <button id="themeToggleBtn" class="action-btn circle-btn" title="تبديل المظهر">
           <i class="bi bi-sun-fill" id="themeIcon"></i>
         </button>
         <button id="openImportModalBtn" class="action-btn btn-secondary admin-only-element">
           <i class="bi bi-file-earmark-excel-fill"></i>
-          <span>استيراد Excel</span>
+          <span data-i18n="import_excel">استيراد Excel</span>
         </button>
         <a href="/api/export" class="action-btn btn-primary" id="exportBtn">
           <i class="bi bi-download"></i>
-          <span>تصدير Excel</span>
+          <span data-i18n="export_excel">تصدير Excel</span>
         </a>
       </div>
     </header>
@@ -70,7 +101,7 @@
             <i class="bi bi-pc-display"></i>
           </div>
           <div class="stat-info">
-            <h3>إجمالي الأجهزة</h3>
+            <h3 data-i18n="total_devices">إجمالي الأجهزة</h3>
             <div class="stat-number" id="statTotalDevices">0</div>
           </div>
           <div class="stat-bg-icon"><i class="bi bi-pc-display"></i></div>
@@ -81,7 +112,7 @@
             <i class="bi bi-display-fill"></i>
           </div>
           <div class="stat-info">
-            <h3>أجهزة مكتبية (Desktop)</h3>
+            <h3 data-i18n="desktop_devices">أجهزة مكتبية (Desktop)</h3>
             <div class="stat-number" id="statDesktops">0</div>
           </div>
           <div class="stat-bg-icon"><i class="bi bi-display-fill"></i></div>
@@ -92,7 +123,7 @@
             <i class="bi bi-laptop-fill"></i>
           </div>
           <div class="stat-info">
-            <h3>أجهزة محمولة (Laptop)</h3>
+            <h3 data-i18n="laptop_devices">أجهزة محمولة (Laptop)</h3>
             <div class="stat-number" id="statLaptops">0</div>
           </div>
           <div class="stat-bg-icon"><i class="bi bi-laptop-fill"></i></div>
@@ -103,7 +134,7 @@
             <i class="bi bi-exclamation-triangle-fill"></i>
           </div>
           <div class="stat-info">
-            <h3>أجهزة بها مشاكل</h3>
+            <h3 data-i18n="faulty_devices">أجهزة بها مشاكل</h3>
             <div class="stat-number" id="statIssueDevices">0</div>
           </div>
           <div class="stat-bg-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
@@ -114,7 +145,7 @@
       <section class="analytics-section">
         <div class="chart-container">
           <div class="chart-header">
-            <h3><i class="bi bi-pie-chart-fill"></i> توزيع الأجهزة حسب الإدارة</h3>
+            <h3><i class="bi bi-pie-chart-fill"></i><span data-i18n="chart_dist"> توزيع الأجهزة حسب الإدارة</span></h3>
           </div>
           <div class="chart-body">
             <canvas id="deptChart"></canvas>
@@ -122,7 +153,7 @@
         </div>
         <div class="chart-container">
           <div class="chart-header">
-            <h3><i class="bi bi-bar-chart-line-fill"></i> الأجهزة السليمة مقابل الأجهزة المعطلة</h3>
+            <h3><i class="bi bi-bar-chart-line-fill"></i><span data-i18n="chart_status"> الأجهزة السليمة مقابل الأجهزة المعطلة</span></h3>
           </div>
           <div class="chart-body">
             <canvas id="statusChart"></canvas>
@@ -134,8 +165,8 @@
       <section class="advanced-comparisons-section">
         <div class="comparison-container">
           <div class="comparison-header">
-            <h3><i class="bi bi-sliders"></i> مقارنات توزيع العهد والملحقات</h3>
-            <p class="subtitle">تحليل مقارن للموظفين بناءً على الأجهزة والملحقات المستلمة</p>
+            <h3><i class="bi bi-sliders"></i><span data-i18n="chart_compare"> مقارنات توزيع العهد والملحقات</span></h3>
+            <p class="subtitle"><span data-i18n="chart_desc">تحليل مقارن للموظفين بناءً على الأجهزة والملحقات المستلمة</span></p>
           </div>
           <div class="comparison-grid" id="comparisonGrid">
             <!-- Dynamically populated comparison progress bars -->
@@ -160,39 +191,42 @@
           <div class="header-filters">
             <!-- Filter by Dept -->
             <div class="filter-group">
-              <label for="filterDept">الإدارة:</label>
+              <label for="filterDept"><span data-i18n="filter_dept">الإدارة:</span></label>
               <select id="filterDept">
                 <option value="all">الكل</option>
               </select>
             </div>
             <!-- Filter by Nature -->
             <div class="filter-group">
-              <label for="filterNature">نوع الجهاز:</label>
+              <label for="filterNature"><span data-i18n="filter_type">نوع الجهاز:</span></label>
               <select id="filterNature">
                 <option value="all">الكل</option>
-                <option value="Desktop">مكتبي (Desktop)</option>
-                <option value="Laptop">محمول (Laptop)</option>
+                <option value="Desktop"><span data-i18n="desktop">مكتبي (Desktop)</span></option>
+                <option value="Laptop"><span data-i18n="laptop">محمول (Laptop)</span></option>
+                <option value="Printer"><span data-i18n="printer">طابعة (Printer)</span></option>
+                <option value="Fingerprint">بصمة (Fingerprint)</option>
+                <option value="AccessPoint">أكسس بوينت (Access Point)</option>
               </select>
             </div>
             <!-- Filter by Status -->
             <div class="filter-group">
-              <label for="filterStatus">الحالة:</label>
+              <label for="filterStatus"><span data-i18n="filter_status">الحالة:</span></label>
               <select id="filterStatus">
                 <option value="all">الكل</option>
-                <option value="clean">سليم (بدون مشاكل)</option>
-                <option value="issues">به مشاكل تقنية</option>
+                <option value="clean"><span data-i18n="status_clean">سليم (بدون مشاكل)</span></option>
+                <option value="issues"><span data-i18n="status_issues">به مشاكل تقنية</span></option>
               </select>
             </div>
 
             <!-- Add Device Button -->
             <button id="openAddModalBtn" class="action-btn btn-success admin-only-element">
               <i class="bi bi-plus-circle-fill"></i>
-              <span>إضافة جهاز جديد</span>
+              <span data-i18n="add_device">إضافة جهاز جديد</span>
             </button>
             <!-- Add Column Button -->
             <button id="openAddColumnModalBtn" class="action-btn btn-primary admin-only-element">
               <i class="bi bi-layout-three-columns"></i>
-              <span>إضافة عمود جديد</span>
+              <span data-i18n="add_column">إضافة عمود جديد</span>
             </button>
           </div>
         </div>
@@ -202,12 +236,9 @@
           <table class="data-table" id="devicesTable">
             <thead>
               <tr>
-                <th>الموظف</th>
-                <th>الإدارة / القسم</th>
-                <th>موديل الجهاز</th>
-                <th>نوع/حجم الهاردسك</th>
-                <th>الرام</th>
-                <th>السيريال (Service Tag)</th>
+                <th>الرقم الوظيفي</th>
+                <th>اسم الموظف</th>
+                <th>المسمى الوظيفي</th>
                 <th>الحالة التقنية</th>
                 <th class="admin-only-element">الإجراءات</th>
               </tr>
@@ -217,7 +248,7 @@
               <tr>
                 <td colspan="8" class="loading-cell">
                   <div class="spinner"></div>
-                  <span>جاري تحميل البيانات...</span>
+                  <span><span data-i18n="loading">جاري تحميل البيانات...</span></span>
                 </td>
               </tr>
             </tbody>
@@ -246,104 +277,153 @@
         <input type="hidden" id="deviceId">
         <div class="form-grid">
           <!-- Section 1: Employee info -->
-          <div class="form-section-title">بيانات الموظف والجهة</div>
-          <div class="form-group">
-            <label for="employeeName">اسم الموظف <span class="required">*</span></label>
-            <input type="text" id="employeeName" required placeholder="مثال: يوسف أحمد حكيم">
+          <div class="form-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>بيانات الموظف والجهة</span>
+            <button type="button" class="action-btn circle-btn addCustomFieldBtn" data-section="employee" style="width: 32px; height: 32px; font-size: 0.8rem;" title="إضافة حقل مخصص">
+              <i class="bi bi-plus-lg"></i>
+            </button>
           </div>
-          <div class="form-group">
-            <label for="department">الإدارة <span class="required">*</span></label>
-            <input type="text" id="department" required placeholder="مثال: التجارية">
+          <div id="customFields_employee" class="full-width" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;"></div>
+          <div class="form-group" style="position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
+            <div>
+              <label for="employeeName"><span data-i18n="emp_name">اسم الموظف </span><span class="required">*</span></label>
+              <div style="display: flex; gap: 5px;">
+                <input type="text" id="employeeName" list="employeeNamesList" required placeholder="مثال: يوسف أحمد حكيم" style="flex: 1;">
+                <datalist id="employeeNamesList"></datalist>
+                <button type="button" class="action-btn btn-info" id="sharedPrinterBtn" style="display: none;" title="تعيين كطابعة للإدارة" onclick="document.getElementById('employeeName').value='طابعة مشتركة / عهدة الإدارة'"><i class="bi bi-diagram-3"></i></button>
+              </div>
+            </div>
+            <div>
+              <label for="employeeId"><span>الرقم الوظيفي</span></label>
+              <input type="text" id="employeeId" placeholder="مثال: 12345">
+            </div>
           </div>
-          <div class="form-group">
-            <label for="section">القسم</label>
-            <input type="text" id="section" placeholder="مثال: الدعم التجاري">
-          </div>
-          <div class="form-group">
-            <label for="unit">الوحدة</label>
-            <input type="text" id="unit" placeholder="مثال: الدعم الفني">
+          <div class="form-group" style="grid-column: 1 / -1;">
+            <button type="button" class="btn btn-secondary" onclick="openOrgTreeModal()" style="width: 100%; margin-bottom: 15px; background: var(--surface-color); color: var(--primary-color); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; padding: 0.75rem;">
+              <span style="font-size: 1.5rem;">🗺️</span> تحديد عبر الخريطة التنظيمية
+            </button>
+            <div id="dynamic-org-container" style="display: flex; flex-direction: column; gap: 15px; width: 100%;">
+              <!-- Dropdowns will be rendered here dynamically -->
+            </div>
+            <input type="hidden" id="orgPath" name="orgPath" required>
           </div>
 
           <!-- Section 2: Device specs -->
-          <div class="form-section-title">المواصفات التقنية للجهاز</div>
+          <div class="form-section-title" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>المواصفات التقنية للجهاز</span>
+            <button type="button" class="action-btn circle-btn addCustomFieldBtn" data-section="specs" style="width: 32px; height: 32px; font-size: 0.8rem;" title="إضافة حقل مخصص (مثال: كرت شاشة، قارئ أقراص...)">
+              <i class="bi bi-plus-lg"></i>
+            </button>
+          </div>
+          
           <div class="form-group">
-            <label for="deviceNature">طبيعة الجهاز</label>
-            <select id="deviceNature">
-              <option value="Desktop">مكتبي (Desktop)</option>
-              <option value="Laptop">محمول (Laptop)</option>
-              <option value="None">بدون كمبيوتر / عهدة أخرى (None)</option>
+            <label for="assetType"><span data-i18n="asset_type">نوع الأصل (العهدة)</span></label>
+            <select id="assetType" onchange="toggleDeviceFields()">
+              <option value="Computer"><span data-i18n="asset_computer">جهاز كمبيوتر (Computer)</span></option>
+              <option value="Printer"><span data-i18n="asset_printer">طابعة (Printer)</span></option>
+              <option value="Fingerprint">جهاز بصمة (Fingerprint)</option>
+              <option value="AccessPoint">أكسس بوينت (Access Point)</option>
+              <option value="None"><span data-i18n="asset_none">أخرى / بدون (Other)</span></option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="deviceModel">موديل الجهاز <span class="required">*</span></label>
-            <input type="text" id="deviceModel" required placeholder="مثال: DELL OPTIPLEX 7000">
+
+          <div class="form-group computer-only-fields">
+            <label for="deviceNature"><span data-i18n="device_nature">طبيعة الجهاز</span></label>
+            <select id="deviceNature">
+              <option value="Desktop"><span data-i18n="desktop">مكتبي (Desktop)</span></option>
+              <option value="Laptop"><span data-i18n="laptop">محمول (Laptop)</span></option>
+            </select>
           </div>
-          <div class="form-group">
-            <label for="serviceTag">السيرفس تاق (Service Tag) <span class="required">*</span></label>
-            <input type="text" id="serviceTag" required placeholder="السيريال نمبر الخاص بالجهاز">
+          
+          <!-- Printer Only Fields -->
+          <div class="form-group printer-only-fields" style="display: none;">
+            <label for="connectionType"><span data-i18n="conn_type">طريقة توصيل الطابعة</span></label>
+            <select id="connectionType" onchange="toggleIpAddressField()">
+              <option value="USB">كابل USB</option>
+              <option value="Network">شبكة سلكية (Network Cable)</option>
+              <option value="Wireless">شبكة لاسلكية (Wi-Fi)</option>
+            </select>
           </div>
-          <div class="form-group">
-            <label for="ram">سعة الرام (RAM)</label>
+          <div class="form-group printer-only-fields" id="ipAddressGroup" style="display: none;">
+            <label for="ipAddress">عنوان IP (IP Address)</label>
+            <input type="text" id="ipAddress" placeholder="مثال: 192.168.1.50">
+          </div>
+
+          <div class="form-group general-device-field">
+            <label for="deviceModel"><span data-i18n="device_model">موديل الجهاز/الطابعة</span></label>
+            <input type="text" id="deviceModel" placeholder="مثال: HP LaserJet Pro">
+          </div>
+          <div class="form-group general-device-field">
+            <label for="serviceTag"><span data-i18n="service_tag">السيرفس تاق (Service Tag)</span></label>
+            <input type="text" id="serviceTag" placeholder="السيريال نمبر">
+          </div>
+          
+          <!-- PC Only Fields Grouping -->
+          <div class="form-group pc-only-fields">
+            <label for="ram"><span data-i18n="ram_size">سعة الرام (RAM)</span></label>
             <input type="text" id="ram" placeholder="مثال: 16 GB">
           </div>
-          <div class="form-group">
-            <label for="storageType">نوع الهاردسك</label>
+          <div class="form-group pc-only-fields">
+            <label for="storageType"><span data-i18n="disk_type">نوع الهاردسك</span></label>
             <select id="storageType">
               <option value="SSD">SSD</option>
               <option value="HDD">HDD</option>
               <option value="NVMe">NVMe</option>
             </select>
           </div>
-          <div class="form-group">
-            <label for="storageSize">حجم الهاردسك</label>
+          <div class="form-group pc-only-fields">
+            <label for="storageSize"><span data-i18n="disk_size">حجم الهاردسك</span></label>
             <input type="text" id="storageSize" placeholder="مثال: 512 GB">
           </div>
-          <div class="form-group">
-            <label for="monitorsCount">عدد الشاشات المرفقة</label>
+          <div class="form-group pc-only-fields">
+            <label for="monitorsCount"><span data-i18n="monitors">عدد الشاشات المرفقة</span></label>
             <input type="number" id="monitorsCount" min="1" max="10" value="1">
           </div>
-          <div class="form-group">
-            <label for="phone">الهاتف / Cisco IP Phone</label>
+          <div class="form-group pc-only-fields">
+            <label for="phone"><span data-i18n="ip_phone">الهاتف / Cisco IP Phone</span></label>
             <input type="text" id="phone" placeholder="مثال: هاتف سيسكو 2571 // رقم 4134">
           </div>
+          <div class="form-group pc-only-fields">
+            <label for="osVersion">نظام التشغيل (OS Version)</label>
+            <input type="text" id="osVersion" placeholder="مثال: Windows 11 25H2">
+          </div>
+
+          <!-- Custom Fields Container for Specs -->
+          <div id="customFields_specs" class="full-width" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;"></div>
 
           <!-- Section 3: Issues and systems -->
-          <div class="form-section-title">الأنظمة والملاحظات</div>
-          <div class="form-group">
-            <label for="technicalStatus">الحالة التقنية للجهاز <span class="required">*</span></label>
-            <select id="technicalStatus">
-              <option value="سليم">سليم</option>
-              <option value="بحاجة لصيانة">بحاجة لصيانة</option>
-              <option value="تحت الصيانة">تحت الصيانة</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="systemsUsed">الأنظمة والمنظومات المستخدمة</label>
-            <input type="text" id="systemsUsed" placeholder="مثال: أوفيس 365، أودين، بيلنج سستم">
-          </div>
-          <div class="form-group full-width">
-            <label for="recurringIssues">المشاكل والأعطال التقنية المتكررة</label>
-            <textarea id="recurringIssues" rows="2" placeholder="اكتب الأعطال الفنية الحالية إن وجدت (مثال: بطء في التشغيل، انارة الشاشة ضعيفة...)"></textarea>
-          </div>
-          <div class="form-group full-width">
-            <label for="notes">الملاحظات العامة</label>
-            <textarea id="notes" rows="2" placeholder="اكتب الملاحظات الإضافية هنا (مثال: نظام التشغيل Windows 11 25H2، حالة الجهاز العامة...)"></textarea>
-          </div>
-
-          <!-- Section 4: Custom Fields -->
-          <div class="form-section-title" style="display: flex; justify-content: space-between; align-items: center;">
-            <span>الحقول الإضافية المخصصة</span>
-            <button type="button" id="addCustomFieldBtn" class="action-btn circle-btn" style="width: 32px; height: 32px; font-size: 0.8rem;" title="إضافة حقل مخصص">
+          <div class="form-section-title general-device-field" style="display: flex; justify-content: space-between; align-items: center;">
+            <span>الأنظمة والملاحظات</span>
+            <button type="button" class="action-btn circle-btn addCustomFieldBtn" data-section="notes" style="width: 32px; height: 32px; font-size: 0.8rem;" title="إضافة حقل مخصص">
               <i class="bi bi-plus-lg"></i>
             </button>
           </div>
-          <div id="customFieldsContainer" class="full-width" style="display: flex; flex-direction: column; gap: 0.75rem;">
-            <!-- Dynamically populated rows of custom fields -->
+          <div id="customFields_notes" class="full-width" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;"></div>
+          <div class="form-group general-device-field">
+            <label for="technicalStatus">الحالة التقنية للجهاز</label>
+            <select id="technicalStatus">
+              <option value="سليم"><span data-i18n="status_ok">سليم</span></option>
+              <option value="بحاجة لصيانة"><span data-i18n="status_need_maint">بحاجة لصيانة</span></option>
+              <option value="تحت الصيانة"><span data-i18n="status_in_maint">تحت الصيانة</span></option>
+            </select>
           </div>
+          <div class="form-group pc-only-fields">
+            <label for="systemsUsed"><span data-i18n="used_systems">الأنظمة والمنظومات المستخدمة</span></label>
+            <input type="text" id="systemsUsed" placeholder="مثال: أوفيس 365، أودين، بيلنج سستم">
+          </div>
+          <div class="form-group full-width general-device-field">
+            <label for="recurringIssues"><span data-i18n="tech_issues">المشاكل والأعطال التقنية المتكررة</span></label>
+            <textarea id="recurringIssues" rows="2" placeholder="اكتب الأعطال الفنية الحالية إن وجدت (مثال: بطء في التشغيل، انارة الشاشة ضعيفة...)"></textarea>
+          </div>
+          <div class="form-group full-width general-device-field">
+            <label for="notes"><span data-i18n="general_notes">الملاحظات العامة</span></label>
+            <textarea id="notes" rows="2" placeholder="اكتب الملاحظات الإضافية هنا (مثال: نظام التشغيل Windows 11 25H2، حالة الجهاز العامة...)"></textarea>
+          </div>
+
         </div>
         <div class="modal-footer">
-          <button type="button" class="action-btn btn-secondary" onclick="closeModal('deviceModal')">إلغاء</button>
-          <button type="submit" class="action-btn btn-primary" id="saveDeviceBtn">حفظ البيانات</button>
+          <button type="button" class="action-btn btn-secondary" onclick="closeModal('deviceModal')"><span data-i18n="cancel">إلغاء</span></button>
+          <button type="submit" class="action-btn btn-primary" id="saveDeviceBtn"><span data-i18n="save_data">حفظ البيانات</span></button>
         </div>
       </form>
     </div>
@@ -363,7 +443,7 @@
         <button type="button" class="action-btn btn-primary" onclick="printDetailCard()">
           <i class="bi bi-printer-fill"></i> طباعة البطاقة
         </button>
-        <button type="button" class="action-btn btn-secondary" onclick="closeModal('detailsModal')">إغلاق</button>
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('detailsModal')"><span data-i18n="close">إغلاق</span></button>
       </div>
     </div>
   </div>
@@ -372,7 +452,7 @@
   <div id="importModal" class="modal">
     <div class="modal-content small-modal-content">
       <div class="modal-header">
-        <h3>استيراد البيانات من ملف Excel</h3>
+        <h3><span data-i18n="import_excel_modal">استيراد البيانات من ملف Excel</span></h3>
         <button class="close-modal-btn" onclick="closeModal('importModal')">&times;</button>
       </div>
       <form id="importForm">
@@ -384,8 +464,8 @@
           <div class="selected-file-name" id="selectedFileName"></div>
         </div>
         <div class="modal-footer">
-          <button type="button" class="action-btn btn-secondary" onclick="closeModal('importModal')">إلغاء</button>
-          <button type="submit" class="action-btn btn-primary" id="startImportBtn" disabled>ابدأ الاستيراد</button>
+          <button type="button" class="action-btn btn-secondary" onclick="closeModal('importModal')"><span data-i18n="cancel">إلغاء</span></button>
+          <button type="submit" class="action-btn btn-primary" id="startImportBtn" disabled><span data-i18n="start_import">ابدأ الاستيراد</span></button>
         </div>
       </form>
     </div>
@@ -395,42 +475,57 @@
   <div id="deleteModal" class="modal">
     <div class="modal-content small-modal-content">
       <div class="modal-header header-danger">
-        <h3>تأكيد الحذف</h3>
+        <h3><span data-i18n="confirm_delete">تأكيد الحذف</span></h3>
         <button class="close-modal-btn" onclick="closeModal('deleteModal')">&times;</button>
       </div>
       <div class="delete-body">
         <i class="bi bi-exclamation-triangle-fill danger-icon"></i>
-        <p>هل أنت متأكد من رغبتك في حذف هذا الجهاز نهائياً من العهدة؟</p>
+        <p><span data-i18n="delete_msg">هل أنت متأكد من رغبتك في حذف هذا الجهاز نهائياً من العهدة؟</span></p>
         <strong id="deleteTargetName"></strong>
-        <p class="warning-text">ملاحظة: هذا الإجراء لا يمكن التراجع عنه.</p>
+        <p class="warning-text"><span data-i18n="delete_note">ملاحظة: هذا الإجراء لا يمكن التراجع عنه.</span></p>
       </div>
       <div class="modal-footer">
         <input type="hidden" id="deleteDeviceId">
-        <button type="button" class="action-btn btn-secondary" onclick="closeModal('deleteModal')">إلغاء</button>
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('deleteModal')"><span data-i18n="cancel">إلغاء</span></button>
         <button type="button" class="action-btn btn-danger" id="confirmDeleteBtn">حذف نهائي</button>
       </div>
     </div>
   </div>
 
-  <!-- 5. Add Column Modal -->
+  <!-- 5. Manage Custom Columns Modal -->
   <div id="columnModal" class="modal">
     <div class="modal-content small-modal-content">
       <div class="modal-header">
-        <h3>إضافة عمود جديد للمنظومة</h3>
+        <h3><span data-i18n="manage_columns">إدارة الحقول المخصصة</span></h3>
         <button class="close-modal-btn" onclick="closeModal('columnModal')">&times;</button>
       </div>
-      <form id="columnForm">
-        <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
-          <div class="form-group">
-            <label for="newColumnName">اسم العمود المخصص الجديد <span class="required">*</span></label>
-            <input type="text" id="newColumnName" required placeholder="مثال: نظام التشغيل، رقم العهدة، إلخ">
+      <div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+        
+        <!-- List of existing columns -->
+        <div>
+          <h4 style="margin-bottom: 0.5rem; font-size: 0.95rem; color: var(--text-muted);"><span data-i18n="current_columns">الحقول الحالية</span></h4>
+          <ul id="existingColumnsList" style="list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; max-height: 200px; overflow-y: auto; border: 1px solid var(--border-color); border-radius: var(--border-radius-sm); padding: 0.5rem;">
+            <!-- Populated dynamically via JS -->
+          </ul>
+        </div>
+
+        <hr style="border: 0; border-top: 1px dashed var(--border-color); margin: 0;">
+
+        <!-- Add new column form -->
+        <form id="columnForm">
+          <input type="hidden" id="targetSection" value="specs">
+          <div class="form-group" style="margin-bottom: 0;">
+            <label for="newColumnName"><span data-i18n="new_col_name">إضافة حقل جديد </span><span class="required">*</span></label>
+            <div style="display: flex; gap: 0.5rem;">
+              <input type="text" id="newColumnName" required placeholder="مثال: نظام التشغيل، الشاحن..." style="flex: 1;">
+              <button type="submit" class="action-btn btn-primary" id="saveColumnBtn" style="white-space: nowrap;"><i class="bi bi-plus-lg"></i> <span data-i18n="btn_add_col">إضافة</span></button>
+            </div>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button type="button" class="action-btn btn-secondary" onclick="closeModal('columnModal')">إلغاء</button>
-          <button type="submit" class="action-btn btn-primary" id="saveColumnBtn">إضافة العمود</button>
-        </div>
-      </form>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('columnModal')"><span data-i18n="close">إغلاق</span></button>
+      </div>
     </div>
   </div>
 
@@ -438,7 +533,7 @@
   <div id="categoryEmployeesModal" class="modal">
     <div class="modal-content small-modal-content">
       <div class="modal-header">
-        <h3 id="categoryEmployeesTitle">قائمة الموظفين</h3>
+        <h3 id="categoryEmployeesTitle"><span data-i18n="emp_list">قائمة الموظفين</span></h3>
         <button class="close-modal-btn" onclick="closeModal('categoryEmployeesModal')">&times;</button>
       </div>
       <div class="modal-body" style="padding: 1.5rem; max-height: 50vh; overflow-y: auto;">
@@ -447,7 +542,7 @@
         </ul>
       </div>
       <div class="modal-footer">
-        <button type="button" class="action-btn btn-secondary" onclick="closeModal('categoryEmployeesModal')">إغلاق</button>
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('categoryEmployeesModal')"><span data-i18n="close">إغلاق</span></button>
       </div>
     </div>
   </div>
@@ -463,30 +558,30 @@
         
         <!-- Add New User Sub-form -->
         <div class="sub-card" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 1.25rem; border-radius: var(--border-radius-md);">
-          <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--color-primary);"><i class="bi bi-person-plus-fill"></i> إضافة مستخدم جديد</h4>
+          <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--color-primary);"><i class="bi bi-person-plus-fill"></i><span data-i18n="add_user"> إضافة مستخدم جديد</span></h4>
           <form id="addUserForm" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="newUsername">اسم المستخدم <span class="required">*</span></label>
+              <label for="newUsername"><span data-i18n="username">اسم المستخدم </span><span class="required">*</span></label>
               <input type="text" id="newUsername" required placeholder="اسم المستخدم" style="width: 100%;">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
-              <label for="newUserPassword">كلمة المرور <span class="required">*</span></label>
+              <label for="newUserPassword"><span data-i18n="password">كلمة المرور </span><span class="required">*</span></label>
               <input type="password" id="newUserPassword" required placeholder="كلمة المرور" style="width: 100%;">
             </div>
             <div class="form-group" style="margin-bottom: 0;">
               <label for="newUserRole">الصلاحية <span class="required">*</span></label>
               <select id="newUserRole" style="width: 100%;">
-                <option value="User">مستخدم عادي (User)</option>
-                <option value="Admin">مدير النظام (Admin)</option>
+                <option value="User"><span data-i18n="role_user">مستخدم عادي (User)</span></option>
+                <option value="Admin"><span data-i18n="role_admin">مدير النظام (Admin)</span></option>
               </select>
             </div>
-            <button type="submit" class="action-btn btn-success" style="height: 42px; padding: 0 1.5rem;">إضافة</button>
+            <button type="submit" class="action-btn btn-success" style="height: 42px; padding: 0 1.5rem;"><span data-i18n="add">إضافة</span></button>
           </form>
         </div>
 
         <!-- Users List -->
         <div>
-          <h4 style="margin-top: 0; margin-bottom: 1rem;"><i class="bi bi-people-fill"></i> الحسابات المسجلة حالياً</h4>
+          <h4 style="margin-top: 0; margin-bottom: 1rem;"><i class="bi bi-people-fill"></i><span data-i18n="registered_accounts"> الحسابات المسجلة حالياً</span></h4>
           <div class="table-container" style="max-height: 250px; overflow-y: auto;">
             <table class="data-table" style="font-size: 0.9rem; width: 100%;">
               <thead>
@@ -505,7 +600,57 @@
 
       </div>
       <div class="modal-footer">
-        <button type="button" class="action-btn btn-secondary" onclick="closeModal('userManagementModal')">إغلاق</button>
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('userManagementModal')"><span data-i18n="close">إغلاق</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Device History Modal -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content" style="max-width: 800px;">
+      <div class="modal-header">
+        <h2 data-i18n="history_modal_title">سجل حركات الجهاز</h2>
+        <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
+      </div>
+      <div class="modal-body">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-i18n="history_emp">الموظف</th>
+                <th data-i18n="history_dept">الإدارة / القسم</th>
+                <th data-i18n="history_receive_date">تاريخ الاستلام</th>
+                <th data-i18n="history_return_date">تاريخ التسليم</th>
+              </tr>
+            </thead>
+            <tbody id="historyTableBody">
+              <!-- Dynamically populated history list -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('historyModal')"><span data-i18n="close">إغلاق</span></button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Org Tree Modal -->
+  <div class="modal" id="orgTreeModal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h2 style="font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+          <i class="bi bi-diagram-3"></i> الخريطة التنظيمية
+        </h2>
+        <button class="close-modal-btn" onclick="closeModal('orgTreeModal')" aria-label="Close">&times;</button>
+      </div>
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div id="orgTreeContainer" class="org-tree-container">
+          <!-- Dynamically populated tree -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('orgTreeModal')"><span data-i18n="close">إغلاق</span></button>
       </div>
     </div>
   </div>
@@ -517,6 +662,5 @@
   </div>
 
   <!-- App Main Javascript -->
-  <script src="js/app.js"></script>
 </body>
 </html>

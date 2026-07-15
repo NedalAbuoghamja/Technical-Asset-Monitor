@@ -1,0 +1,191 @@
+/* 
+   ==================================================
+   MICROSOFT / CORPORATE ENTERPRISE UI DESIGN SYSTEM
+   ==================================================
+*/
+
+:root {
+  /* System Typography */
+  --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif !important;
+  
+  /* Sharp Geometries */
+  --border-radius-sm: 2px !important;
+  --border-radius-md: 4px !important;
+  --border-radius-lg: 4px !important;
+  --border-radius-xl: 4px !important;
+  
+  /* Disable Animations for strict professional feel */
+  --transition-speed: 0.1s !important;
+  --backdrop-blur: none !important;
+  --glass-gradient: none !important;
+}
+
+/* 
+  LIGHT THEME (Microsoft Fluent Base)
+*/
+body.light-theme {
+  --bg-app: #f3f2f1 !important;
+  --bg-surface: #ffffff !important;
+  --bg-card: #ffffff !important;
+  --bg-input: #ffffff !important;
+  --bg-hover: #f3f2f1 !important;
+  
+  --border-color: #e1dfdd !important;
+  --border-focus: #0078D4 !important;
+  --border-focus-glow: transparent !important;
+  
+  --text-main: #323130 !important;
+  --text-muted: #605e5c !important;
+  --text-inverse: #ffffff !important;
+  
+  --color-primary: #0078D4 !important;
+  --color-primary-hover: #106ebe !important;
+  --color-primary-glow: transparent !important;
+  
+  --color-secondary: #e1dfdd !important;
+  --color-secondary-hover: #c8c6c4 !important;
+  
+  --color-success: #107c10 !important;
+  --color-success-hover: #0b5a0b !important;
+  --color-success-glow: transparent !important;
+  
+  --color-warning: #d83b01 !important;
+  --color-warning-hover: #a82e00 !important;
+  --color-warning-glow: transparent !important;
+  
+  --color-danger: #a4262c !important;
+  --color-danger-hover: #791818 !important;
+  --color-danger-glow: transparent !important;
+  
+  --shadow-sm: none !important;
+  --shadow-md: 0 1.6px 3.6px 0 rgba(0,0,0,0.132), 0 0.3px 0.9px 0 rgba(0,0,0,0.108) !important;
+  --shadow-lg: 0 3.2px 7.2px 0 rgba(0,0,0,0.132), 0 0.6px 1.8px 0 rgba(0,0,0,0.108) !important;
+  --shadow-glow: none !important;
+}
+
+/* 
+  DARK THEME (Microsoft Fluent Base)
+*/
+body.dark-theme {
+  --bg-app: #202020 !important;
+  --bg-surface: #2d2d2d !important;
+  --bg-card: #2d2d2d !important;
+  --bg-input: #3b3a39 !important;
+  --bg-hover: #3b3a39 !important;
+  
+  --border-color: #484644 !important;
+  --border-focus: #2899f5 !important;
+  --border-focus-glow: transparent !important;
+  
+  --text-main: #ffffff !important;
+  --text-muted: #c8c6c4 !important;
+  --text-inverse: #ffffff !important;
+  
+  --color-primary: #2899f5 !important;
+  --color-primary-hover: #4fb0f7 !important;
+  --color-primary-glow: transparent !important;
+  
+  --color-secondary: #484644 !important;
+  --color-secondary-hover: #605e5c !important;
+  
+  --color-success: #54b054 !important;
+  --color-success-hover: #429042 !important;
+  --color-success-glow: transparent !important;
+  
+  --color-warning: #fce100 !important;
+  --color-warning-hover: #c4af00 !important;
+  --color-warning-glow: transparent !important;
+  
+  --color-danger: #f1707b !important;
+  --color-danger-hover: #d15661 !important;
+  --color-danger-glow: transparent !important;
+  
+  --shadow-sm: none !important;
+  --shadow-md: 0 1.6px 3.6px 0 rgba(0,0,0,0.2), 0 0.3px 0.9px 0 rgba(0,0,0,0.15) !important;
+  --shadow-lg: 0 3.2px 7.2px 0 rgba(0,0,0,0.2), 0 0.6px 1.8px 0 rgba(0,0,0,0.15) !important;
+  --shadow-glow: none !important;
+}
+
+/* 
+  SPECIFIC UI COMPONENT OVERRIDES 
+*/
+
+/* Solid backgrounds, no blur */
+.sidebar, .top-header, .stat-card, .data-card, .modal-content, .login-card {
+  background: var(--bg-surface) !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+  box-shadow: var(--shadow-md) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: var(--border-radius-md) !important;
+}
+
+/* Flat Table */
+.data-table th {
+  background: var(--bg-hover) !important;
+  border-bottom: 2px solid var(--border-color) !important;
+  text-transform: none !important;
+  letter-spacing: normal !important;
+  font-weight: 600 !important;
+}
+
+.data-table td {
+  border-bottom: 1px solid var(--border-color) !important;
+}
+
+.data-table tr:hover {
+  background-color: var(--bg-hover) !important;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Badges */
+.badge {
+  border-radius: 2px !important;
+  padding: 3px 8px !important;
+  font-weight: 600 !important;
+  letter-spacing: normal !important;
+  text-transform: none !important;
+}
+
+/* Login Page Overrides */
+.login-page-body .bg-blobs,
+.login-page-body .blob-1,
+.login-page-body .blob-2 {
+  display: none !important;
+}
+
+.login-wrapper .login-card {
+  background: var(--bg-surface) !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border-color) !important;
+  box-shadow: var(--shadow-lg) !important;
+}
+
+.login-wrapper .login-logo {
+  background: var(--bg-surface) !important;
+  box-shadow: none !important;
+  border: 1px solid var(--border-color) !important;
+  color: var(--color-primary) !important;
+}
+
+.login-btn {
+  border-radius: 2px !important;
+  font-weight: normal !important;
+}
+
+/* Scrollbar styling for enterprise */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-app);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-secondary-hover);
+  border-radius: 0px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}

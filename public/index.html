@@ -8,17 +8,96 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <!-- Inter for numbers/latin -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <!-- Bootstrap Icons -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Phosphor Icons for additional modern icons -->
+  <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <!-- Custom Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css?v=1784113485416">
-  <!-- Microsoft/Corporate UI Override -->
-  <link rel="stylesheet" href="css/corporate-ui.css?v=2">
+  <link rel="stylesheet" href="css/styles.css?v=2026">
+  <!-- Design Compat Layer -->
+  <link rel="stylesheet" href="css/corporate-ui.css?v=3">
   <!-- Translations & Initialization -->
   <script src="js/i18n.js?v=19" defer></script>
-  
   <!-- Main Logic -->
-  <script src="js/app.js?v=29" defer></script>
+  <script src="js/app.js?v=2026" defer></script>
+  
+  <!-- 2026 Inline Enhancement Styles -->
+  <style>
+    /* Comparison filters: glass card style */
+    .comparison-filters {
+      background: var(--bg-card) !important;
+      padding: 1.5rem !important;
+      border-radius: var(--r-lg, 22px) !important;
+      margin-bottom: 1.5rem !important;
+      border: 1px solid var(--border) !important;
+      backdrop-filter: blur(12px);
+    }
+    .comparison-filters label {
+      font-size: 0.82rem !important;
+      font-weight: 800 !important;
+      color: var(--clr-primary-lt, #818cf8) !important;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    /* Checkbox custom style */
+    .comp-metric-cb {
+      accent-color: var(--clr-primary, #6366f1);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+    .comp-metric-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: var(--r-md, 16px);
+      border: 1px solid var(--border, rgba(255,255,255,0.07));
+      background: var(--bg-input, rgba(8,12,28,0.8));
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 700;
+      transition: all 0.2s;
+    }
+    .comp-metric-label:hover {
+      border-color: var(--clr-primary, #6366f1);
+      background: var(--clr-primary-subtle, rgba(99,102,241,0.08));
+    }
+    .comp-metric-label:has(.comp-metric-cb:checked) {
+      border-color: var(--clr-primary, #6366f1);
+      background: var(--clr-primary-subtle, rgba(99,102,241,0.08));
+      color: var(--clr-primary-lt, #818cf8);
+    }
+    /* Table row zebra subtle */
+    .data-table tbody tr:nth-child(even) td {
+      background: rgba(99,102,241,0.018);
+    }
+    /* Pulse number animation on load */
+    @keyframes count-up {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .stat-number { animation: count-up 0.5s ease both; }
+    /* Active filter glow */
+    .filter-group select:focus,
+    .dynamic-org-select:focus {
+      border-color: var(--clr-primary, #6366f1) !important;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.18) !important;
+    }
+    /* section gap */
+    .app-content > section + section { }
+    /* Org dropdowns in comparison */
+    #dynamic-comp-org-container select {
+      background: var(--bg-input) !important;
+      color: var(--tx-main, #eef1ff) !important;
+      border: 1px solid var(--border) !important;
+      border-radius: var(--r-md, 16px) !important;
+    }
+    /* Smooth scrolling */
+    html { scroll-behavior: smooth; }
+  </style>
   <!-- Chart.js CDN -->
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
@@ -168,7 +247,44 @@ document.addEventListener('DOMContentLoaded', async () => {
             <h3><i class="bi bi-sliders"></i><span data-i18n="chart_compare"> مقارنات توزيع العهد والملحقات</span></h3>
             <p class="subtitle"><span data-i18n="chart_desc">تحليل مقارن للموظفين بناءً على الأجهزة والملحقات المستلمة</span></p>
           </div>
-          <div class="comparison-grid" id="comparisonGrid">
+
+          <div class="comparison-filters">
+            <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 1.5rem; align-items: start;">
+              
+              <!-- Org Filter -->
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="margin-bottom: 0.6rem; display: block;">الفلترة حسب الهيكلية الإدارية:</label>
+                <div id="dynamic-comp-org-container" class="org-dropdowns-container"></div>
+                <input type="hidden" id="compOrgPath" value="">
+              </div>
+              
+              <!-- Metric Checkboxes -->
+              <div class="form-group" style="margin-bottom: 0;">
+                <label style="margin-bottom: 0.6rem; display: block;">المقارنات التي تريد عرضها:</label>
+                <div style="display: flex; flex-wrap: wrap; gap: 0.65rem; align-items: center;">
+                  <label class="comp-metric-label">
+                    <input type="checkbox" class="comp-metric-cb" value="has_computer" checked>
+                    <i class="bi bi-pc-display" style="color: var(--clr-warning, #f59e0b);"></i>
+                    <span>من لديه جهاز كمبيوتر أو أكثر</span>
+                  </label>
+                  <label class="comp-metric-label">
+                    <input type="checkbox" class="comp-metric-cb" value="has_monitor" checked>
+                    <i class="bi bi-display" style="color: var(--clr-success, #10b981);"></i>
+                    <span>من لديه أكثر من شاشة</span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- Run Button -->
+              <div style="align-self: end;">
+                <button id="runComparisonsBtn" class="action-btn btn-primary" style="width: 100%; justify-content: center; gap: 0.5rem;">
+                  <i class="bi bi-play-fill"></i>
+                  تشغيل المقارنة
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="comparison-grid" id="comparisonGrid" style="display: none;">
             <!-- Dynamically populated comparison progress bars -->
             <div class="loading-cell">جاري تحميل مقارنات العهد...</div>
           </div>
@@ -179,7 +295,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       <section class="inventory-section">
         <div class="inventory-header">
           <div class="header-title-search">
-            <h2><i class="bi bi-table"></i> قائمة الأجهزة والعهدة</h2>
+            <h2><i class="bi bi-grid-3x3-gap-fill"></i> قائمة الأجهزة والعهدة</h2>
             
             <!-- Live Search -->
             <div class="search-box">
@@ -219,7 +335,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             </div>
 
             <!-- Add Device Button -->
-            <button id="openAddModalBtn" class="action-btn btn-success admin-only-element">
+            <button id="openAddModalBtn" class="action-btn btn-success" style="display: none;">
               <i class="bi bi-plus-circle-fill"></i>
               <span data-i18n="add_device">إضافة جهاز جديد</span>
             </button>
@@ -425,7 +541,21 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button type="button" class="action-btn btn-secondary" onclick="closeModal('deviceModal')"><span data-i18n="cancel">إلغاء</span></button>
           <button type="submit" class="action-btn btn-primary" id="saveDeviceBtn"><span data-i18n="save_data">حفظ البيانات</span></button>
         </div>
-      </form>
+      
+          <div id="userPermissionsDiv" style="grid-column: 1 / -1; display: flex; gap: 1rem; align-items: center; margin-top: 10px; background: var(--bg-color); padding: 0.75rem; border-radius: var(--border-radius-sm);">
+            <strong style="color: var(--color-primary); font-size: 0.9rem;">صلاحيات المستخدم العادي:</strong>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="permAdd" value="canAdd"> إضافة أجهزة
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="permEdit" value="canEdit"> تعديل أجهزة
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="permDelete" value="canDelete"> حذف أجهزة
+            </label>
+          </div>
+
+          </form>
     </div>
   </div>
 
@@ -605,11 +735,68 @@ document.addEventListener('DOMContentLoaded', async () => {
     </div>
   </div>
 
+  
+  <!-- Add/Edit History Record Modal -->
+  <div id="historyRecordModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 600px;">
+      <div class="modal-header">
+        <h3 id="historyRecordModalTitle">إضافة حركة جهاز</h3>
+        <span class="close-btn" onclick="closeModal('historyRecordModal')">&times;</span>
+      </div>
+      <form id="historyRecordForm">
+        <div class="modal-body">
+          <input type="hidden" id="hr_deviceId">
+          <input type="hidden" id="hr_historyId">
+          
+          <div class="form-section-title">بيانات الاستلام (الحالة السابقة)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>الموظف السابق</label>
+              <input type="text" id="hr_prev_employee" placeholder="مثال: غير معروف">
+            </div>
+            <div class="form-group">
+              <label>مكان الوظيفة السابق</label>
+              <input type="text" id="hr_prev_orgPath" placeholder="مثال: مجلس الإدارة||تقنية المعلومات">
+            </div>
+          </div>
+          
+          <div class="form-section-title">بيانات التسليم (الحالة الجديدة)</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>الموظف الجديد</label>
+              <input type="text" id="hr_new_employee" placeholder="مثال: محمد أحمد" required>
+            </div>
+            <div class="form-group">
+              <label>مكان الوظيفة الجديد</label>
+              <input type="text" id="hr_new_orgPath" placeholder="مثال: مجلس الإدارة||تقنية المعلومات" required>
+            </div>
+          </div>
+          
+          <div class="form-section-title">تاريخ الحركة</div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>التاريخ والوقت (الجديد)</label>
+              <input type="datetime-local" id="hr_timestamp" required>
+            </div>
+          </div>
+          
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="action-btn btn-secondary" onclick="closeModal('historyRecordModal')"><span data-i18n="cancel">إلغاء</span></button>
+          <button type="submit" class="action-btn btn-primary"><span data-i18n="save">حفظ</span></button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Device History Modal -->
   <div id="historyModal" class="modal">
     <div class="modal-content" style="max-width: 800px;">
       <div class="modal-header">
         <h2 data-i18n="history_modal_title">سجل حركات الجهاز</h2>
+        <button id="addHistoryRecordBtn" class="action-btn btn-success admin-only-element" style="margin-right: auto; margin-left: 1rem; padding: 4px 8px; font-size: 0.9rem;" title="إضافة حركة جديدة">
+          <i class="bi bi-plus-circle"></i> إضافة
+        </button>
         <span class="close-btn" onclick="closeModal('historyModal')">&times;</span>
       </div>
       <div class="modal-body">

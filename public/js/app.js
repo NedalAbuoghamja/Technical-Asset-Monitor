@@ -241,6 +241,14 @@ function setupUserManagement() {
       const usernameInput = document.getElementById('newUsername');
       const passwordInput = document.getElementById('newUserPassword');
       const roleInput = document.getElementById('newUserRole');
+      roleInput.addEventListener('change', (e) => {
+        const permsDiv = document.getElementById('userPermissionsDiv');
+        if (permsDiv) {
+          permsDiv.style.opacity = e.target.value === 'Admin' ? '0.5' : '1';
+          permsDiv.style.pointerEvents = e.target.value === 'Admin' ? 'none' : 'auto';
+        }
+      });
+  
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -249,7 +257,12 @@ function setupUserManagement() {
           body: JSON.stringify({
             username: usernameInput.value,
             password: passwordInput.value,
-            role: roleInput.value
+            role: roleInput.value,
+            permissions: {
+              canAdd: document.getElementById('permAdd') ? document.getElementById('permAdd').checked : false,
+              canEdit: document.getElementById('permEdit') ? document.getElementById('permEdit').checked : false,
+              canDelete: document.getElementById('permDelete') ? document.getElementById('permDelete').checked : false
+            }
           })
         });
 
@@ -443,6 +456,7 @@ async function fetchDevices() {
     restoreSearchAndFilters();
     applySearchAndFilters();
     updateStats();
+    if (typeof populateComparisonOrgFilter === "function") populateComparisonOrgFilter();
     renderCharts();
     renderComparisons();
   } catch (error) {
@@ -472,7 +486,7 @@ function renderTable() {
         <th>${window.t ? window.t('th_employee') : 'اسم الموظف'}</th>
         <th>${window.t ? window.t('th_department') : 'المسمى الوظيفي'}</th>
         <th>${window.t ? window.t('th_status') : 'الحالة التقنية'}</th>
-        <th class="admin-only-element">${window.t ? window.t('th_actions') : 'الإجراءات'}</th>
+        <th>${window.t ? window.t('th_actions') : 'الإجراءات'}</th>
       </tr>
     `;
     tableHead.innerHTML = headHtml;
@@ -540,7 +554,7 @@ function renderTable() {
       <td>${statusBadge}</td>
     `;
     rowHtml += `
-      <td class="admin-only-element">
+      <td>
         <div class="actions-cell">
           <button class="action-icon-btn btn-view" onclick="viewDeviceHistory(${d.id})" title="سجل حركات الجهاز">
             <i class="bi bi-clock-history"></i>
@@ -548,12 +562,8 @@ function renderTable() {
           <button class="action-icon-btn btn-view" onclick="viewDeviceDetails(${d.id})" title="عرض التفاصيل والبطاقة التقنية">
             <i class="bi bi-file-earmark-text"></i>
           </button>
-          <button class="action-icon-btn btn-edit" onclick="openEditModal(${d.id})" title="تعديل">
-            <i class="bi bi-pencil"></i>
-          </button>
-          <button class="action-icon-btn btn-delete" onclick="openDeleteModal(${d.id}, '${d.employeeName}')" title="حذف">
-            <i class="bi bi-trash"></i>
-          </button>
+          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canEdit))) ? `<button class="action-icon-btn btn-edit" onclick="openEditModal(${d.id})" title="تعديل"><i class="bi bi-pencil"></i></button>` : ''}
+          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canDelete))) ? `<button class="action-icon-btn btn-delete" onclick="openDeleteModal(${d.id}, '${d.employeeName}')" title="حذف"><i class="bi bi-trash"></i></button>` : ''}
         </div>
       </td>
     `;
@@ -601,12 +611,34 @@ function showTableLoading() {
 function populateDeptFilter() {
   const filterDept = document.getElementById('filterDept');
   if (!filterDept) return;
+  
+  const savedVal = filterDept.value;
   filterDept.innerHTML = '<option value="all">الكل</option>';
   
-  if (orgStructure['مجلس الإدارة']) {
-    Object.keys(orgStructure['مجلس الإدارة']).forEach(dept => {
-      filterDept.add(new Option(dept, dept));
-    });
+  const allDepts = new Set();
+  
+  function traverse(obj, path) {
+    if (!obj) return;
+    for (const key in obj) {
+      if (key !== 'الكل' && key !== 'لايوجد') {
+        const fullPath = path ? path + ' || ' + key : key;
+        allDepts.add(fullPath);
+        if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+          traverse(obj[key], fullPath);
+        }
+      }
+    }
+  }
+  
+  traverse(orgStructure, '');
+  
+  Array.from(allDepts).sort().forEach(deptPath => {
+    const displayName = deptPath.replace(/\|\|/g, ' > ');
+    filterDept.add(new Option(displayName, deptPath));
+  });
+
+  if (Array.from(allDepts).includes(savedVal)) {
+    filterDept.value = savedVal;
   }
 }
 
@@ -630,12 +662,29 @@ function populateEmployeeDatalist() {
   });
 }
 
+// Animated number counter for premium 2026 UI feel
+function animateCounter(element, targetValue, duration = 700) {
+  if (!element) return;
+  const start = parseInt(element.textContent) || 0;
+  const end = targetValue;
+  if (start === end) return;
+  const startTime = performance.now();
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
+  function step(currentTime) {
+    const elapsed = currentTime - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    element.textContent = Math.round(start + (end - start) * easeOut(progress));
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 // UPDATE STATISTICS
 function updateStats() {
-  statTotalDevices.textContent = devices.length;
-  statDesktops.textContent = devices.filter(d => d.deviceNature === 'Desktop').length;
-  statLaptops.textContent = devices.filter(d => d.deviceNature === 'Laptop').length;
-  statIssueDevices.textContent = devices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length;
+  animateCounter(statTotalDevices, devices.length);
+  animateCounter(statDesktops, devices.filter(d => d.deviceNature === 'Desktop').length);
+  animateCounter(statLaptops, devices.filter(d => d.deviceNature === 'Laptop').length);
+  animateCounter(statIssueDevices, devices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length);
 }
 
 // CHARTS SYSTEM
@@ -757,36 +806,70 @@ function renderCharts() {
   });
 }
 
-// ADVANCED CUSTODY COMPARISONS (2026 UI Upgrade)
+
+function populateComparisonOrgFilter() {
+  const orgPathInput = document.getElementById('compOrgPath');
+  if (!orgPathInput) return;
+  // Initialize with empty array to show the first dropdown
+  if (!orgPathInput.value) {
+    renderDynamicCompOrgDropdowns([""]);
+  }
+}
+
 function renderComparisons() {
   const comparisonGrid = document.getElementById('comparisonGrid');
   if (!comparisonGrid) return;
+  
+  // If grid is hidden (user hasn't clicked Run), don't render yet
+  if (comparisonGrid.style.display === 'none' || comparisonGrid.style.display === '') {
+    return;
+  }
 
-  // 1. Group devices by employeeName
+  const orgPathInput = document.getElementById('compOrgPath');
+  const orgFilterVal = orgPathInput ? orgPathInput.value : '';
+  
+  const checkboxes = document.querySelectorAll('.comp-metric-cb');
+  const metrics = {
+    has_computer: true,
+    has_monitor: true
+  };
+  if (checkboxes.length > 0) {
+    checkboxes.forEach(cb => {
+      metrics[cb.value] = cb.checked;
+    });
+  }
+
+  // 1. Filter and group devices
   const employeeData = {};
   
   devices.forEach(d => {
     if (!d.employeeName) return;
+    
+    // Apply Org Filter
+    if (orgFilterVal && d.orgPath) {
+      const normalizedPath = d.orgPath.replace(/\s*\|\|\s*/g, '||');
+      const normalizedFilter = orgFilterVal.replace(/\s*\|\|\s*/g, '||');
+      if (!normalizedPath.includes(normalizedFilter)) return;
+    } else if (orgFilterVal && !d.orgPath) {
+      return; 
+    }
+
     const name = d.employeeName.trim();
     if (!employeeData[name]) {
-      employeeData[name] = {
+      employeeData[name] = { 
         name: name,
-        devices: [],
-        totalMonitors: 0,
+        totalMonitors: 0, 
         totalComputers: 0,
-        laptopsCount: 0,
-        desktopsCount: 0
+        desktopsCount: 0,
+        laptopsCount: 0 
       };
     }
     
-    employeeData[name].devices.push(d);
+    const nature = d.deviceNature || 'Desktop';
+    if (d.assetType === 'Monitor' || nature === 'Monitor' || d.monitorsCount > 0) {
+      employeeData[name].totalMonitors += (parseInt(d.monitorsCount) || 1);
+    }
     
-    // Monitors Count
-    const monitors = parseInt(d.monitorsCount) || 0;
-    employeeData[name].totalMonitors += monitors;
-    
-    // Computer check
-    const nature = (d.deviceNature || '').trim();
     if (nature === 'Desktop') {
       employeeData[name].totalComputers += 1;
       employeeData[name].desktopsCount += 1;
@@ -800,79 +883,65 @@ function renderComparisons() {
   const totalEmployees = uniqueEmployees.length;
 
   if (totalEmployees === 0) {
-    comparisonGrid.innerHTML = `
-      <div class="loading-cell">لا توجد بيانات عهد لحساب المقارنات.</div>
-    `;
+    comparisonGrid.innerHTML = '<div class="loading-cell">لا توجد أجهزة مطابقة للمقارنة بناءً على الإدارة المحددة.</div>';
+    comparisonGrid.style.display = 'grid';
     return;
   }
 
   // 2. Calculate comparison groups and lists
-  const listOneMonitor = [];
-  const listTwoMonitors = [];
-  const listNoComputer = [];
-  const listOneComputer = [];
-  const listTwoComputers = [];
-  const listLaptopAndDesktop = [];
-  const listTwoLaptops = [];
+  const listHasComputer = [];
+  const listHasMonitor = [];
 
   uniqueEmployees.forEach(emp => {
-    // Monitors
-    if (emp.totalMonitors === 1) listOneMonitor.push(emp.name);
-    else if (emp.totalMonitors >= 2) listTwoMonitors.push(emp.name);
-
-    // Computers count
-    if (emp.totalComputers === 0) listNoComputer.push(emp.name);
-    else if (emp.totalComputers === 1) listOneComputer.push(emp.name);
-    else if (emp.totalComputers >= 2) listTwoComputers.push(emp.name);
-
-    // Laptop & Desktop combo
-    if (emp.desktopsCount >= 1 && emp.laptopsCount >= 1) listLaptopAndDesktop.push(emp.name);
-
-    // Two Laptops combo
-    if (emp.laptopsCount >= 2) listTwoLaptops.push(emp.name);
+    if (emp.totalComputers >= 1) listHasComputer.push(emp.name);
+    if (emp.totalMonitors >= 2) listHasMonitor.push(emp.name);
   });
 
   // Store lists in global state for modal reference
   window.comparisonLists = {
-    'one_monitor': { title: 'الموظفون الذين لديهم شاشة واحدة', list: listOneMonitor },
-    'two_monitors': { title: 'الموظفون الذين لديهم شاشتان أو أكثر', list: listTwoMonitors },
-    'no_computer': { title: 'الموظفون بدون كمبيوتر (عهدة أخرى)', list: listNoComputer },
-    'one_computer': { title: 'الموظفون الذين لديهم جهاز كمبيوتر واحد', list: listOneComputer },
-    'two_computers': { title: 'الموظفون الذين لديهم جهازان أو أكثر', list: listTwoComputers },
-    'laptop_and_desktop': { title: 'الموظفون الذين لديهم لابتوب ومكتبي معاً', list: listLaptopAndDesktop },
-    'two_laptops': { title: 'الموظفون الذين لديهم لابتوبان أو أكثر', list: listTwoLaptops }
+    'has_computer': { title: 'الموظفون الذين لديهم جهاز كمبيوتر أو أكثر', list: listHasComputer },
+    'has_monitor': { title: 'الموظفون الذين لديهم أكثر من شاشة', list: listHasMonitor }
   };
-
-  // Helper to generate progress bar HTML
-  const makeBar = (key, titleKey, count, colorClass, iconClass) => {
-    const pct = totalEmployees > 0 ? ((count / totalEmployees) * 100).toFixed(1) : 0;
-    const title = window.t ? window.t(titleKey) : titleKey;
-    const empText = window.t ? (count >= 3 && count <= 10 ? window.t('emp_plural') : window.t('emp_single')) : (count >= 3 && count <= 10 ? 'موظفين' : 'موظف');
-    return `
-      <div class="comp-card" onclick="showCategoryEmployees('${key}')" title="انقر لعرض قائمة الموظفين" style="cursor: pointer;">
-        <div class="comp-info">
-          <span class="comp-title"><i class="bi ${iconClass}"></i> ${title}</span>
-          <span class="comp-badge badge-${colorClass}">${count} ${empText} (${pct}%)</span>
-        </div>
-        <div class="comp-progress-bg">
-          <div class="comp-progress-bar progress-${colorClass}" style="width: ${pct}%"></div>
+  
+  let gridHtml = '';
+  
+  if (metrics.has_computer) {
+    gridHtml += `
+      <div class="comparison-card" onclick="showCategoryEmployees('has_computer')">
+        <div class="card-icon"><i class="bi bi-pc-display"></i></div>
+        <div class="card-info">
+          <h4>من لديه جهاز كمبيوتر أو أكثر</h4>
+          <div class="progress-bar-container">
+            <div class="progress-bar bg-warning" style="width: ${(listHasComputer.length/totalEmployees)*100}%"></div>
+          </div>
+          <p class="count-text">${listHasComputer.length} ${window.t ? window.t('comp_employee') : 'موظف'} (${((listHasComputer.length/totalEmployees)*100).toFixed(1)}%)</p>
         </div>
       </div>
     `;
-  };
-
-  comparisonGrid.innerHTML = `
-    ${makeBar('one_monitor', 'comp_one_monitor', listOneMonitor.length, 'info', 'bi-display')}
-    ${makeBar('two_monitors', 'comp_two_monitors', listTwoMonitors.length, 'success', 'bi-display-fill')}
-    ${makeBar('no_computer', 'comp_no_pc', listNoComputer.length, 'danger', 'bi-person-x-fill')}
-    ${makeBar('one_computer', 'comp_one_pc', listOneComputer.length, 'warning', 'bi-laptop')}
-    ${makeBar('two_computers', 'comp_two_pcs', listTwoComputers.length, 'primary', 'bi-pc-display-horizontal')}
-    ${makeBar('laptop_and_desktop', 'comp_laptop_desktop', listLaptopAndDesktop.length, 'secondary', 'bi-arrow-left-right')}
-    ${makeBar('two_laptops', 'comp_two_laptops', listTwoLaptops.length, 'success', 'bi-laptop-fill')}
-  `;
+  }
+  
+  if (metrics.has_monitor) {
+    gridHtml += `
+      <div class="comparison-card" onclick="showCategoryEmployees('has_monitor')">
+        <div class="card-icon"><i class="bi bi-display"></i></div>
+        <div class="card-info">
+          <h4>من لديه أكثر من شاشة</h4>
+          <div class="progress-bar-container">
+            <div class="progress-bar bg-success" style="width: ${(listHasMonitor.length/totalEmployees)*100}%"></div>
+          </div>
+          <p class="count-text">${listHasMonitor.length} ${window.t ? window.t('comp_employee') : 'موظف'} (${((listHasMonitor.length/totalEmployees)*100).toFixed(1)}%)</p>
+        </div>
+      </div>
+    `;
+  }
+  
+  if (!gridHtml) {
+    gridHtml = '<div class="loading-cell">الرجاء تحديد نوع مقارنة واحد على الأقل.</div>';
+  }
+  comparisonGrid.innerHTML = gridHtml;
+  comparisonGrid.style.display = 'grid';
 }
 
-// Show category employees modal
 function showCategoryEmployees(key) {
   const categoryData = window.comparisonLists ? window.comparisonLists[key] : null;
   if (!categoryData) return;
@@ -1103,6 +1172,16 @@ function renderDynamicOrgDropdowns(selectedPathArray) {
 // EVENT LISTENERS
 function setupEventListeners() {
   initOrgStructureSelects();
+
+  const runComparisonsBtn = document.getElementById('runComparisonsBtn');
+  if (runComparisonsBtn) {
+    runComparisonsBtn.addEventListener('click', () => {
+      const grid = document.getElementById('comparisonGrid');
+      if (grid) grid.style.display = 'grid';
+      renderComparisons();
+    });
+  }
+
   
   // Theme Toggle
   themeToggleBtn.addEventListener('click', toggleTheme);
@@ -1732,7 +1811,7 @@ async function handleColumnSubmit(e) {
     nameInput.value = '';
     
     // Reload state
-    customColumns = result;
+    await fetchCustomColumns();
     renderExistingColumns();
     
     // If the deviceModal is open, re-render the custom fields in it
@@ -1843,6 +1922,7 @@ window.addEventListener('languageChanged', () => {
 
 async function viewDeviceHistory(id) {
   try {
+    currentHistoryDeviceId = id;
     const res = await fetch(`/api/devices/${id}/history`);
     if (!res.ok) throw new Error('Failed to fetch history');
     const history = await res.json();
@@ -1854,17 +1934,26 @@ async function viewDeviceHistory(id) {
       let returnDate = 'الآن (العهدة الحالية)';
       
       // We assume history is sorted by timestamp DESC
+      currentHistoryData = history;
       history.forEach((h, index) => {
          const receiveDate = new Date(h.timestamp).toLocaleString('ar-LY');
          
-         // Current owner (h.new_employee) period (only rendered on the first iteration which is the latest movement)
+         // Admin actions HTML
+         const actionsHtml = (currentUser && currentUser.role === 'Admin') ? `
+            <td class="admin-only-element">
+              <button class="action-icon-btn btn-edit" onclick="openHistoryRecordModal(${h.id})" title="تعديل"><i class="bi bi-pencil-square"></i></button>
+              <button class="action-icon-btn btn-delete" onclick="deleteHistoryRecord(${h.id})" title="حذف"><i class="bi bi-trash"></i></button>
+            </td>
+         ` : '';
+
          if (index === 0) {
              periodsHtml += `
              <tr>
                <td><strong style="color:var(--primary-color)">${h.new_employee || '-'}</strong></td>
-               <td><strong style="color:var(--primary-color)">${h.new_department || '-'} / ${h.new_section || '-'}</strong></td>
+               <td><strong style="color:var(--primary-color)">${h.new_orgPath ? h.new_orgPath.replace(/\|\|/g, ' / ') : (h.new_department || '-')}</strong></td>
                <td>${receiveDate}</td>
                <td><span class="badge badge-success">${returnDate}</span></td>
+               ${actionsHtml}
              </tr>`;
          }
          
@@ -1874,9 +1963,10 @@ async function viewDeviceHistory(id) {
          periodsHtml += `
              <tr>
                <td>${h.previous_employee || '-'}</td>
-               <td>${h.previous_department || '-'} / ${h.previous_section || '-'}</td>
+               <td>${h.previous_orgPath ? h.previous_orgPath.replace(/\|\|/g, ' / ') : (h.previous_department || '-')}</td>
                <td>${prevReceiveDate}</td>
                <td>${returnDate}</td>
+               ${actionsHtml}
              </tr>`;
       });
       tbody.innerHTML = periodsHtml;
@@ -2059,30 +2149,193 @@ window.toggleOrgTree = function(btnId, contentId) {
 }
 
 window.selectOrgPath = function(pathStr) {
-  const path = pathStr.split('||');
-  setOrgSelectValue('department', path[0] || '');
-  document.getElementById('department').dispatchEvent(new Event('change'));
-  
-  if (path[1]) {
-    setOrgSelectValue('circle', path[1]);
-    document.getElementById('circle').dispatchEvent(new Event('change'));
-  } else {
-    setOrgSelectValue('circle', '');
-    document.getElementById('circle').dispatchEvent(new Event('change'));
-  }
-  
-  if (path[2]) {
-    setOrgSelectValue('section', path[2]);
-    document.getElementById('section').dispatchEvent(new Event('change'));
-  } else {
-    setOrgSelectValue('section', '');
-    document.getElementById('section').dispatchEvent(new Event('change'));
-  }
-  
-  if (path[3]) {
-    setOrgSelectValue('unit', path[3]);
-  } else {
-    setOrgSelectValue('unit', '');
-  }
+  setOrgSelectValue(pathStr);
   closeModal('orgTreeModal');
+}
+
+
+// ==========================================
+// HISTORY CRUD OPERATIONS
+// ==========================================
+
+function openAddHistoryRecordModal() {
+  document.getElementById('historyRecordForm').reset();
+  document.getElementById('hr_deviceId').value = currentHistoryDeviceId;
+  document.getElementById('hr_historyId').value = '';
+  document.getElementById('historyRecordModalTitle').textContent = 'إضافة حركة جهاز';
+  
+  // Set current time as default
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  document.getElementById('hr_timestamp').value = now.toISOString().slice(0, 16);
+  
+  openModal('historyRecordModal');
+}
+
+function openHistoryRecordModal(historyId) {
+  const h = currentHistoryData.find(x => x.id === historyId);
+  if (!h) return;
+  
+  document.getElementById('historyRecordForm').reset();
+  document.getElementById('hr_deviceId').value = currentHistoryDeviceId;
+  document.getElementById('hr_historyId').value = historyId;
+  document.getElementById('historyRecordModalTitle').textContent = 'تعديل حركة جهاز';
+  
+  document.getElementById('hr_prev_employee').value = h.previous_employee || '';
+  document.getElementById('hr_prev_orgPath').value = h.previous_orgPath || h.previous_department || '';
+  document.getElementById('hr_new_employee').value = h.new_employee || '';
+  document.getElementById('hr_new_orgPath').value = h.new_orgPath || h.new_department || '';
+  
+  const d = new Date(h.timestamp);
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  document.getElementById('hr_timestamp').value = d.toISOString().slice(0, 16);
+  
+  openModal('historyRecordModal');
+}
+
+document.getElementById('historyRecordForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const deviceId = document.getElementById('hr_deviceId').value;
+  const historyId = document.getElementById('hr_historyId').value;
+  
+  const payload = {
+    previous_employee: document.getElementById('hr_prev_employee').value.trim(),
+    previous_orgPath: document.getElementById('hr_prev_orgPath').value.trim(),
+    new_employee: document.getElementById('hr_new_employee').value.trim(),
+    new_orgPath: document.getElementById('hr_new_orgPath').value.trim(),
+    timestamp: new Date(document.getElementById('hr_timestamp').value).toISOString()
+  };
+  
+  const url = historyId ? `/api/devices/${deviceId}/history/${historyId}` : `/api/devices/${deviceId}/history`;
+  const method = historyId ? 'PUT' : 'POST';
+  
+  try {
+    const res = await fetch(url, {
+      method: method,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      },
+      body: JSON.stringify(payload)
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      closeModal('historyRecordModal');
+      viewDeviceHistory(deviceId); // refresh history modal
+    } else {
+      alert('خطأ: ' + (data.error || 'فشل في حفظ الحركة'));
+    }
+  } catch (err) {
+    console.error(err);
+    alert('حدث خطأ في الاتصال بالخادم');
+  }
+});
+
+async function deleteHistoryRecord(historyId) {
+  if (!confirm('هل أنت متأكد من حذف هذه الحركة؟ لا يمكن التراجع عن هذا الإجراء.')) return;
+  
+  try {
+    const res = await fetch(`/api/devices/${currentHistoryDeviceId}/history/${historyId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': 'Bearer ' + localStorage.getItem('token')
+      }
+    });
+    const data = await res.json();
+    if (res.ok) {
+      showToast(data.message);
+      viewDeviceHistory(currentHistoryDeviceId);
+    } else {
+      alert('خطأ: ' + (data.error || 'فشل في حذف الحركة'));
+    }
+  } catch (err) {
+    console.error(err);
+    alert('حدث خطأ في الاتصال بالخادم');
+  }
+}
+
+// Add event listener to the Add Record Button if exists
+const addHistoryRecordBtn = document.getElementById('addHistoryRecordBtn');
+if (addHistoryRecordBtn) {
+  addHistoryRecordBtn.addEventListener('click', openAddHistoryRecordModal);
+}
+
+
+function renderDynamicCompOrgDropdowns(selectedPathArray) {
+  const container = document.getElementById('dynamic-comp-org-container');
+  const orgPathInput = document.getElementById('compOrgPath');
+  if (!container) return;
+  
+  container.innerHTML = '';
+  let currentNode = orgStructure;
+  let currentPath = [];
+  
+  for (let i = 0; i < selectedPathArray.length; i++) {
+    const selectedValue = selectedPathArray[i];
+    
+    // Create select element
+    const select = document.createElement('select');
+    select.className = 'dynamic-org-select form-control';
+    select.style.flex = '1';
+    select.style.minWidth = '120px';
+    select.style.background = 'var(--card-bg)';
+    select.style.color = 'var(--text-color)';
+    select.style.border = '1px solid var(--border-color)';
+    select.dataset.level = i;
+    
+    // Default option
+    const defaultOption = document.createElement('option');
+    defaultOption.value = '';
+    const labelNames = ['كل الإدارات (الكل)', 'التفرع الأول', 'التفرع الثاني', 'التفرع الثالث', 'التفرع الرابع', 'التفرع الخامس'];
+    const label = labelNames[i] || ('التفرع ' + (i+1));
+    defaultOption.textContent = '-- ' + label + ' --';
+    select.appendChild(defaultOption);
+    
+    // Populate options
+    let hasChildren = false;
+    if (currentNode && typeof currentNode === 'object') {
+      Object.keys(currentNode).forEach(key => {
+        if (key === 'الكل' || key === 'لايوجد') return;
+        hasChildren = true;
+        const option = document.createElement('option');
+        option.value = key;
+        option.textContent = key;
+        if (key === selectedValue) option.selected = true;
+        select.appendChild(option);
+      });
+    }
+    
+    if (hasChildren || i === 0) {
+      container.appendChild(select);
+      
+      select.addEventListener('change', function() {
+        const newSelectedValue = this.value;
+        const newPathArray = selectedPathArray.slice(0, i);
+        if (newSelectedValue) {
+          newPathArray.push(newSelectedValue);
+          // If the newly selected node has children, add an empty selection for the next level
+          let nextNode = orgStructure;
+          for(let p of newPathArray) { nextNode = nextNode[p]; }
+          if (nextNode && typeof nextNode === 'object' && Object.keys(nextNode).length > 0) {
+             newPathArray.push("");
+          }
+        }
+        renderDynamicCompOrgDropdowns(newPathArray);
+      });
+      
+      if (selectedValue) {
+        currentPath.push(selectedValue);
+        if (currentNode[selectedValue]) {
+          currentNode = currentNode[selectedValue];
+        } else {
+          currentNode = null;
+        }
+      }
+    }
+  }
+  
+  if (orgPathInput) {
+    orgPathInput.value = currentPath.join('||');
+  }
 }

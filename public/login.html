@@ -431,9 +431,24 @@
       height: 1px;
       background: var(--border);
     }
+    /* Login responsive for mobile */
+    @media (max-width: 767px) {
+      .login-container { padding: 1.5rem; margin: 1rem; border-radius: 16px; }
+      .login-header h1 { font-size: 1.5rem; }
+    }
   </style>
 </head>
 <body>
+
+    <script>
+    // Redirect to public view if viewCard is present
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewCardId = urlParams.get('viewCard');
+    if (viewCardId) {
+      window.location.href = '/view.html?id=' + viewCardId;
+    }
+    </script>
+
   <!-- Animated Background -->
   <div class="bg-scene">
     <div class="orb orb-1"></div>
@@ -507,6 +522,36 @@
         </button>
       </form>
 
+      <!-- Force Password Change Form -->
+      <form id="forcePasswordForm" class="login-form" style="display: none;" novalidate>
+        <div style="text-align: center; margin-bottom: 0.5rem;">
+          <p style="font-size: 0.9rem; color: var(--clr-danger-lt); font-weight: bold;">أنت تستخدم كلمة مرور مؤقتة!</p>
+          <p style="font-size: 0.8rem; color: var(--tx-muted);">الرجاء تعيين كلمة مرور جديدة خاصة بك للمتابعة.</p>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="newPassword">كلمة المرور الجديدة</label>
+          <div class="input-group">
+            <input type="password" id="newPassword" class="form-input" placeholder="أدخل كلمة المرور الجديدة" required>
+            <span class="input-icon"><i class="bi bi-key-fill"></i></span>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="confirmNewPassword">تأكيد كلمة المرور</label>
+          <div class="input-group">
+            <input type="password" id="confirmNewPassword" class="form-input" placeholder="أعد إدخال كلمة المرور" required>
+            <span class="input-icon"><i class="bi bi-key-fill"></i></span>
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn" id="forcePasswordBtn">
+          <span class="btn-text-icon">
+            <i class="bi bi-check-circle-fill"></i>
+            <span>تأكيد وتسجيل الدخول</span>
+          </span>
+          <div class="btn-spinner"></div>
+        </button>
+      </form>
+
       <!-- Version info -->
       <div class="version-badge">
         <div class="version-dot"></div>
@@ -519,13 +564,18 @@
     // Redirect if already logged in
     fetch('/api/auth/me')
       .then(r => r.json())
-      .then(d => { if (d.authenticated) window.location.href = '/'; })
+      .then(d => { if (d.authenticated) window.location.href = '/' + window.location.search; })
       .catch(() => {});
 
+    let tempUsername = '';
+    let tempPassword = '';
+
     const form = document.getElementById('loginForm');
+    const forceForm = document.getElementById('forcePasswordForm');
     const alertBox = document.getElementById('alertBox');
     const alertMsg = document.getElementById('alertMessage');
     const loginBtn = document.getElementById('loginBtn');
+    const forceBtn = document.getElementById('forcePasswordBtn');
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -534,6 +584,7 @@
 
       // Reset & loading state
       alertBox.className = 'login-alert';
+      alertBox.style.display = 'none';
       loginBtn.classList.add('loading');
 
       try {
@@ -544,17 +595,74 @@
         });
         const result = await res.json();
 
-        if (res.ok && result.success) {
+        if (res.ok && result.requirePasswordChange) {
+          tempUsername = username;
+          tempPassword = password;
+          loginBtn.classList.remove('loading');
+          form.style.display = 'none';
+          forceForm.style.display = 'flex';
+        } else if (res.ok && result.success) {
+          alertBox.style.display = 'flex';
           alertBox.className = 'login-alert alert-success';
           alertMsg.textContent = 'تم تسجيل الدخول بنجاح! جاري التوجيه...';
-          setTimeout(() => window.location.href = '/', 700);
+          setTimeout(() => window.location.href = '/' + window.location.search, 700);
         } else {
           loginBtn.classList.remove('loading');
+          alertBox.style.display = 'flex';
           alertBox.className = 'login-alert alert-danger';
           alertMsg.textContent = result.error || 'فشل تسجيل الدخول. تحقق من البيانات.';
         }
       } catch {
         loginBtn.classList.remove('loading');
+        alertBox.style.display = 'flex';
+        alertBox.className = 'login-alert alert-danger';
+        alertMsg.textContent = 'تعذر الاتصال بالخادم. حاول مجدداً.';
+      }
+    });
+
+    forceForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmNewPassword = document.getElementById('confirmNewPassword').value;
+
+      if (newPassword !== confirmNewPassword) {
+        alertBox.style.display = 'flex';
+        alertBox.className = 'login-alert alert-danger';
+        alertMsg.textContent = 'كلمتا المرور غير متطابقتين!';
+        return;
+      }
+      if (newPassword.length < 6) {
+        alertBox.style.display = 'flex';
+        alertBox.className = 'login-alert alert-danger';
+        alertMsg.textContent = 'يجب أن لا تقل كلمة المرور عن 6 أحرف.';
+        return;
+      }
+
+      alertBox.style.display = 'none';
+      forceBtn.classList.add('loading');
+
+      try {
+        const res = await fetch('/api/auth/force-change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: tempUsername, oldPassword: tempPassword, newPassword })
+        });
+        const result = await res.json();
+
+        if (res.ok && result.success) {
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-success';
+          alertMsg.textContent = 'تم تعيين كلمة المرور بنجاح! جاري التوجيه...';
+          setTimeout(() => window.location.href = '/' + window.location.search, 700);
+        } else {
+          forceBtn.classList.remove('loading');
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = result.error || 'فشل التغيير. حاول مجدداً.';
+        }
+      } catch {
+        forceBtn.classList.remove('loading');
+        alertBox.style.display = 'flex';
         alertBox.className = 'login-alert alert-danger';
         alertMsg.textContent = 'تعذر الاتصال بالخادم. حاول مجدداً.';
       }
@@ -562,3 +670,5 @@
   </script>
 </body>
 </html>
+
+

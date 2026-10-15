@@ -1,2 +1,15 @@
 node_modules/
 .env
+*.sqlite
+serviceAccountKey.json
+.vercel/
+*.bak
+*.tmp
+patch_*.js
+clean_*.js
+fix_*.js
+server_backup.js
+server_firebase_177.js
+server_firebase_restored.js
+data_backup/
+migrate_data.js

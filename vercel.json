@@ -1,0 +1,24 @@
+{
+  "name": "technical-asset-monitor",
+  "version": 2,
+  "builds": [
+    {
+      "src": "server_firebase.js",
+      "use": "@vercel/node"
+    },
+    {
+      "src": "public/**/*",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/server_firebase.js"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/public/$1"
+    }
+  ]
+}

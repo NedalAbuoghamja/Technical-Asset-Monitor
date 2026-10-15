@@ -123,6 +123,7 @@ const filterStatus = document.getElementById('filterStatus');
 
 // Stats elements
 const statTotalDevices = document.getElementById('statTotalDevices');
+const statEmployees = document.getElementById('statEmployees');
 const statDesktops = document.getElementById('statDesktops');
 const statLaptops = document.getElementById('statLaptops');
 const statIssueDevices = document.getElementById('statIssueDevices');
@@ -159,15 +160,24 @@ async function checkAuth() {
   try {
     const res = await fetch('/api/auth/me');
     if (!res.ok) {
-      window.location.href = '/login.html';
+      window.location.href = '/login.html' + window.location.search;
       return false;
     }
     const data = await res.json();
     if (!data.authenticated) {
-      window.location.href = '/login.html';
+      window.location.href = '/login.html' + window.location.search;
       return false;
     }
-    currentUser = data.user;
+    let fetchedUser = data.user;
+    if (typeof fetchedUser.permissions === 'string') {
+      try {
+        fetchedUser.permissions = JSON.parse(fetchedUser.permissions);
+      } catch(e) {
+        fetchedUser.permissions = {};
+      }
+    }
+    currentUser = fetchedUser;
+    localStorage.setItem('user', JSON.stringify(currentUser));
     return true;
   } catch (error) {
     console.error("Auth check failed:", error);
@@ -185,6 +195,77 @@ function initUserInterface() {
     userSessionInfo.style.display = 'flex';
   }
   
+  if (currentUser.role !== 'Admin') {
+    const btn = document.getElementById('openUserManagementBtn');
+    if (btn) btn.style.display = 'none';
+    const userManagementModal = document.getElementById('userManagementModal');
+    if (userManagementModal) userManagementModal.style.display = 'none';
+  } else {
+    const btn = document.getElementById('openUserManagementBtn');
+    if (btn) btn.style.display = 'inline-flex';
+  }
+
+  
+  // Hide Add Device and Import buttons if they don't have permission
+  
+  // Show add column buttons for everyone
+  const addColsBtns = document.querySelectorAll('.addCustomFieldBtn, .delete-col-btn');
+  addColsBtns.forEach(btn => {
+    btn.style.display = 'inline-flex';
+  });
+
+  const addBtn = document.getElementById('openAddModalBtn');
+  const importBtn = document.getElementById('openImportModalBtn');
+  
+  if (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canAdd)) {
+    if (addBtn) addBtn.style.display = 'inline-flex';
+    if (importBtn) importBtn.style.display = 'inline-flex';
+  } else {
+    if (addBtn) addBtn.style.display = 'none';
+    if (importBtn) importBtn.style.display = 'none';
+  }
+
+  const recycleBinBtn = document.getElementById('openRecycleBinBtn');
+  if (recycleBinBtn) {
+    if (currentUser.role === 'Admin' || currentUser.role === 'Supervisor' || (currentUser.permissions && currentUser.permissions.canDelete)) {
+      recycleBinBtn.style.display = 'inline-flex';
+    } else {
+      recycleBinBtn.style.display = 'none';
+    }
+  }
+
+  const comparisonSection = document.getElementById('comparisonContainerSection');
+  if (comparisonSection) {
+    if (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canViewComparisons)) {
+      comparisonSection.style.display = '';
+    } else {
+      comparisonSection.style.display = 'none';
+    }
+  }
+
+  const statsSection = document.getElementById('statsRowSection');
+  if (statsSection) {
+    if (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canViewStats)) {
+      statsSection.style.display = '';
+    } else {
+      statsSection.style.display = 'none';
+    }
+  }
+
+  const notificationsWrapper = document.getElementById('notificationsWrapper');
+  if (notificationsWrapper) {
+    notificationsWrapper.style.display = 'block'; // Show for EVERYONE so they can see their own logs
+  }
+
+  const analyticsSection = document.getElementById('analyticsSection');
+  if (analyticsSection) {
+    if (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canViewStats)) {
+      analyticsSection.style.display = '';
+    } else {
+      analyticsSection.style.display = 'none';
+    }
+  }
+
   // Populate username
   const userNameText = document.getElementById('userNameText');
   if (userNameText) {
@@ -194,9 +275,22 @@ function initUserInterface() {
   // Populate role badge
   const userRoleBadge = document.getElementById('userRoleBadge');
   if (userRoleBadge) {
-    const isAdmin = currentUser.role === 'Admin';
-    userRoleBadge.className = `user-role-badge ${isAdmin ? 'role-admin' : 'role-user'}`;
-    userRoleBadge.innerHTML = `<i class="bi ${isAdmin ? 'bi-shield-lock-fill' : 'bi-person-fill'}"></i> ${isAdmin ? 'مدير النظام' : 'مستخدم عادي'}`;
+    let roleText = 'مدخل بيانات';
+    let roleIcon = 'bi-person-fill';
+    let roleClass = 'role-user';
+
+    if (currentUser.role === 'Admin') {
+      roleText = 'مدير النظام';
+      roleIcon = 'bi-shield-lock-fill';
+      roleClass = 'role-admin';
+    } else if (currentUser.role === 'Supervisor') {
+      roleText = 'مشرف';
+      roleIcon = 'bi-star-fill';
+      roleClass = 'role-supervisor';
+    }
+
+    userRoleBadge.className = `user-role-badge ${roleClass}`;
+    userRoleBadge.innerHTML = `<i class="bi ${roleIcon}"></i> ${roleText}`;
   }
   
   // Set is-admin class on body if Admin
@@ -223,7 +317,7 @@ function initUserInterface() {
 }
 
 function setupUserManagement() {
-  if (!currentUser || currentUser.role !== 'Admin') return;
+  if (!currentUser || (currentUser.role !== 'Admin' && !(currentUser.permissions && currentUser.permissions.canViewLogs))) return;
 
   const openUserManagementBtn = document.getElementById('openUserManagementBtn');
   const addUserForm = document.getElementById('addUserForm');
@@ -249,6 +343,8 @@ function setupUserManagement() {
         }
       });
   
+      const submitBtn = addUserForm.querySelector('button[type="submit"]');
+      if (submitBtn) submitBtn.disabled = true;
 
       try {
         const res = await fetch('/api/admin/users', {
@@ -258,10 +354,14 @@ function setupUserManagement() {
             username: usernameInput.value,
             password: passwordInput.value,
             role: roleInput.value,
+            mustChangePassword: document.getElementById('newUserMustChangePassword') ? document.getElementById('newUserMustChangePassword').checked : true,
             permissions: {
               canAdd: document.getElementById('permAdd') ? document.getElementById('permAdd').checked : false,
               canEdit: document.getElementById('permEdit') ? document.getElementById('permEdit').checked : false,
-              canDelete: document.getElementById('permDelete') ? document.getElementById('permDelete').checked : false
+              canDelete: document.getElementById('permDelete') ? document.getElementById('permDelete').checked : false,
+              canViewComparisons: document.getElementById('permComparisons') ? document.getElementById('permComparisons').checked : false,
+              canViewStats: document.getElementById('permStats') ? document.getElementById('permStats').checked : false,
+              canViewLogs: document.getElementById('permLogs') ? document.getElementById('permLogs').checked : false
             }
           })
         });
@@ -273,7 +373,62 @@ function setupUserManagement() {
           passwordInput.value = '';
           fetchUsers();
         } else {
-          showToast(data.error || 'فشل إضافة المستخدم', true);
+          showToast(data.error || 'حدث خطأ', true);
+        }
+      } catch (error) {
+        showToast('حدث خطأ في الاتصال', true);
+      } finally {
+        if (submitBtn) submitBtn.disabled = false;
+      }
+    });
+  }
+
+  const editUserForm = document.getElementById('editUserForm');
+  if (editUserForm) {
+    const editRoleInput = document.getElementById('editUserRole');
+    editRoleInput.addEventListener('change', (e) => {
+      const permsDiv = document.getElementById('editUserPermissionsDiv');
+      if (permsDiv) {
+        permsDiv.style.opacity = e.target.value === 'Admin' ? '0.5' : '1';
+        permsDiv.style.pointerEvents = e.target.value === 'Admin' ? 'none' : 'auto';
+      }
+    });
+
+    editUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const userId = document.getElementById('editUserId').value;
+      const passwordInput = document.getElementById('editUserPassword').value;
+      const roleInput = document.getElementById('editUserRole').value;
+      const mustChangePassword = document.getElementById('editUserMustChangePassword') ? document.getElementById('editUserMustChangePassword').checked : false;
+      
+      const permissions = {
+        canAdd: document.getElementById('editPermAdd') ? document.getElementById('editPermAdd').checked : false,
+        canEdit: document.getElementById('editPermEdit') ? document.getElementById('editPermEdit').checked : false,
+        canDelete: document.getElementById('editPermDelete') ? document.getElementById('editPermDelete').checked : false,
+        canViewComparisons: document.getElementById('editPermComparisons') ? document.getElementById('editPermComparisons').checked : false,
+        canViewStats: document.getElementById('editPermStats') ? document.getElementById('editPermStats').checked : false,
+        canViewLogs: document.getElementById('editPermLogs') ? document.getElementById('editPermLogs').checked : false
+      };
+
+      try {
+        const res = await fetch(`/api/admin/users/${userId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            password: passwordInput,
+            role: roleInput,
+            mustChangePassword,
+            permissions
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok) {
+          showToast('تم تعديل المستخدم بنجاح');
+          closeModal('editUserModal');
+          fetchUsers();
+        } else {
+          showToast(data.error || 'فشل تعديل المستخدم', true);
         }
       } catch (error) {
         showToast('خطأ في الاتصال بالخادم', true);
@@ -301,24 +456,88 @@ function renderUsers(users) {
   users.forEach(u => {
     const tr = document.createElement('tr');
     
-    // Disable delete if user is 'admin' or if it is the logged-in user
-    const isSelfOrAdmin = u.username === 'admin' || (currentUser && u.username === currentUser.username);
+    const isMainAdmin = u.username === 'admin';
+    const isSelfOrAdmin = isMainAdmin || (currentUser && u.username === currentUser.username);
     const deleteButton = isSelfOrAdmin 
       ? `<span class="badge badge-info" style="opacity: 0.6;">محمي</span>`
-      : `<button class="action-icon-btn btn-delete" onclick="deleteUser(${u.id}, '${u.username}')" title="حذف">
+      : `<button class="action-icon-btn btn-delete" onclick="deleteUser('${u.id}', '${u.username}')" title="حذف">
            <i class="bi bi-trash"></i>
          </button>`;
 
-    const roleLabel = u.role === 'Admin' ? 'مدير النظام' : 'مستخدم عادي';
+    const editButton = isMainAdmin
+      ? ``
+      : `<button class="action-icon-btn btn-edit" onclick="openEditUserModal('${u.id}')" title="تعديل">
+           <i class="bi bi-pencil-square"></i>
+         </button>`;
+
+    let roleLabel = 'مستخدم غير معروف';
+    if (u.role === 'Admin') roleLabel = 'مدير النظام';
+    else if (u.role === 'Supervisor') roleLabel = 'مشرف';
+    else if (u.role === 'DataEntry' || u.role === 'User') roleLabel = 'مدخل بيانات';
 
     tr.innerHTML = `
       <td><strong>${u.username}</strong></td>
       <td>${roleLabel}</td>
-      <td>${deleteButton}</td>
+      <td style="display: flex; gap: 0.5rem; justify-content: center;">${editButton}${deleteButton}</td>
     `;
     usersTableBody.appendChild(tr);
   });
 }
+
+async function openEditUserModal(id) {
+  try {
+    const res = await fetch('/api/admin/users');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'فشل جلب البيانات');
+
+    const users = Array.isArray(data) ? data : [];
+    const u = users.find(x => x.id === id);
+    if (!u) return showToast('المستخدم غير موجود', true);
+
+    document.getElementById('editUserId').value = u.id;
+    document.getElementById('editUsername').value = u.username;
+    document.getElementById('editUserPassword').value = '';
+    document.getElementById('editUserRole').value = u.role || 'DataEntry';
+    
+    // Check permissions
+    let perms = {};
+    if (u.permissions) {
+      try {
+        const parsed = typeof u.permissions === 'string' ? JSON.parse(u.permissions) : u.permissions;
+        if (parsed && typeof parsed === 'object') {
+          perms = parsed;
+        }
+      } catch(e){}
+    }
+    document.getElementById('editPermAdd').checked = !!perms.canAdd;
+    document.getElementById('editPermEdit').checked = !!perms.canEdit;
+    document.getElementById('editPermDelete').checked = !!perms.canDelete;
+    if (document.getElementById('editPermComparisons')) {
+      document.getElementById('editPermComparisons').checked = !!perms.canViewComparisons;
+    }
+    if (document.getElementById('editPermStats')) {
+      document.getElementById('editPermStats').checked = !!perms.canViewStats;
+    }
+    if (document.getElementById('editPermLogs')) {
+      document.getElementById('editPermLogs').checked = !!perms.canViewLogs;
+    }
+
+    // Must change password
+    document.getElementById('editUserMustChangePassword').checked = !!u.mustChangePassword;
+
+    // Toggle permissions visibility
+    const permsDiv = document.getElementById('editUserPermissionsDiv');
+    if (permsDiv) {
+      permsDiv.style.opacity = u.role === 'Admin' ? '0.5' : '1';
+      permsDiv.style.pointerEvents = u.role === 'Admin' ? 'none' : 'auto';
+    }
+
+    openModal('editUserModal');
+  } catch (error) {
+    showToast(error.message, true);
+  }
+}
+window.openEditUserModal = openEditUserModal;
 
 async function deleteUser(id, username) {
   if (!confirm(`هل أنت متأكد من حذف المستخدم "${username}"؟`)) return;
@@ -326,6 +545,7 @@ async function deleteUser(id, username) {
   try {
     const res = await fetch(`/api/admin/users/${id}`, { method: 'DELETE' });
     const data = await res.json();
+
     if (res.ok) {
       showToast('تم حذف المستخدم بنجاح');
       fetchUsers();
@@ -343,15 +563,41 @@ window.deleteUser = deleteUser;
 // INITIALIZATION
 document.addEventListener('DOMContentLoaded', async () => {
   initTheme();
+
+  // Auto-append GB to RAM and Storage Size
+  const ramInput = document.getElementById('ram');
+  if (ramInput) {
+    ramInput.addEventListener('blur', function() {
+      let val = this.value.trim().toUpperCase();
+      if (val && !val.includes('GB') && !val.includes('TB') && !val.includes('MB')) {
+        this.value = val + ' GB';
+      }
+    });
+  }
+
+  const storageInput = document.getElementById('storageSize');
+  if (storageInput) {
+    storageInput.addEventListener('blur', function() {
+      let val = this.value.trim().toUpperCase();
+      if (val && !val.includes('GB') && !val.includes('TB') && !val.includes('MB')) {
+        this.value = val + ' GB';
+      }
+    });
+  }
+
   
   // Verify user session
   const authenticated = await checkAuth();
   if (!authenticated) return;
   
   initUserInterface();
+
+
+
   setupUserManagement();
   await fetchCustomColumns();
   fetchDevices();
+  fetchSystemLogs();
   setupEventListeners();
   setupRealTimeUpdates();
 });
@@ -375,7 +621,7 @@ function setupRealTimeUpdates() {
     }
   };
 
-  sseConnection.onmessage = (event) => {
+    sseConnection.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data);
       if (data.type === 'devices_updated') {
@@ -385,9 +631,28 @@ function setupRealTimeUpdates() {
           'delete': 'حذف جهاز',
           'import': 'استيراد بيانات'
         }[data.action] || 'تحديث';
-        showToast(`📡 ${actionLabel} بواسطة ${data.by || 'مستخدم آخر'} — جاري تحديث البيانات...`);
+        showToast('تم ' + actionLabel + ' بواسطة ' + (data.by || 'مستخدم آخر') + ' - جاري جلب التحديثات...');
         // Refresh data silently
         fetchCustomColumns().then(() => fetchDevices());
+            } else if (data.type === 'user_updated' && currentUser && currentUser.id === data.userId) {
+        checkAuth().then(auth => {
+          if (auth) {
+            showToast('تم تحديث صلاحياتك من قبل الإدارة', false);
+            initUserInterface();
+
+
+
+            setupUserManagement();
+            fetchDevices();
+          }
+        });
+      } else if (data.type === 'user_deleted' && currentUser && currentUser.id === data.userId) {
+        showToast('تم حذف حسابك من قبل الإدارة', true);
+        setTimeout(() => window.location.href = '/login.html', 1500);
+} else if (data.type === 'new_log') {
+        if (currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canViewLogs))) {
+          handleNewLogEvent(data);
+        }
       }
     } catch (e) {
       console.warn('[SSE] Could not parse message:', event.data);
@@ -459,6 +724,14 @@ async function fetchDevices() {
     if (typeof populateComparisonOrgFilter === "function") populateComparisonOrgFilter();
     renderCharts();
     renderComparisons();
+    
+    // Auto-open device card if viewCard query param is present
+    const urlParams = new URLSearchParams(window.location.search);
+    const viewCardId = urlParams.get('viewCard');
+    if (viewCardId && !window.hasViewedCard) {
+      window.hasViewedCard = true;
+      setTimeout(() => viewDeviceDetails(viewCardId), 500);
+    }
   } catch (error) {
     showToast(error.message, true);
     devicesTableBody.innerHTML = `
@@ -495,9 +768,12 @@ function renderTable() {
   if (filteredDevices.length === 0) {
     devicesTableBody.innerHTML = `
       <tr>
-        <td colspan="${totalCols}" class="loading-cell">
-          <i class="bi bi-inbox" style="font-size: 2rem; color: var(--text-muted)"></i><br>
-          <span>لا توجد أجهزة مطابقة لخيارات البحث والتصفية.</span>
+        <td colspan="${totalCols}" class="loading-cell" style="padding: 2.5rem 1rem;">
+          <i class="bi bi-inbox" style="font-size: 2.5rem; color: var(--tx-muted, #94a3b8)"></i><br>
+          <span style="display:block; margin: 10px 0; font-size: 1rem; font-weight: 600;">لا توجد أجهزة مطابقة لخيارات البحث والتصفية المحددة.</span>
+          <button type="button" class="action-btn btn-secondary" onclick="resetSearchAndFilters()" style="margin: 8px auto 0; font-size: 0.85rem; padding: 6px 16px; gap: 6px;">
+            <i class="bi bi-arrow-counterclockwise"></i> إعادة ضبط الفلاتر والبحث
+          </button>
         </td>
       </tr>
     `;
@@ -525,19 +801,8 @@ function renderTable() {
     }
     const statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusDisplay}</span>`;
 
-    // RAM spec clean view
-    const ramSpec = d.deviceNature === 'Printer' ? `<span class="text-muted">${window.t ? window.t('not_applicable') : 'لا ينطبق'}</span>` : (d.ram || (window.t ? window.t('dept_none') : 'لا يوجد'));
-    
-    // Storage spec clean view
-    let storageSpec = `${d.storageType} ${d.storageSize}`;
-    if (d.deviceNature === 'Printer') {
-      const conn = d.connectionType || 'USB';
-      const connIcon = conn === 'Wireless' ? 'bi-wifi' : (conn === 'Network' ? 'bi-hdd-network' : 'bi-usb-symbol');
-      storageSpec = `<i class="bi ${connIcon}"></i> ${conn}`;
-    }
-
     let rowHtml = `
-      <td>
+      <td data-label="الرقم الوظيفي">
         <div class="employee-cell">
           <span class="emp-name">${d.employeeId || '—'}</span>
         </div>
@@ -552,18 +817,19 @@ function renderTable() {
         <span style="font-size: 0.85rem; color: var(--text-muted);" title="${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : ''}">${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : '-'}</span>
       </td>
       <td>${statusBadge}</td>
+      <td><span class="badge badge-secondary" style="background: var(--bg-input); color: var(--text-muted); border: 1px solid var(--border);">${d.created_by || 'غير معروف'}</span></td>
     `;
     rowHtml += `
       <td>
         <div class="actions-cell">
-          <button class="action-icon-btn btn-view" onclick="viewDeviceHistory(${d.id})" title="سجل حركات الجهاز">
+          <button class="action-icon-btn btn-view" onclick="viewDeviceHistory('${d.id}')" title="سجل حركات الجهاز">
             <i class="bi bi-clock-history"></i>
           </button>
-          <button class="action-icon-btn btn-view" onclick="viewDeviceDetails(${d.id})" title="عرض التفاصيل والبطاقة التقنية">
+          <button class="action-icon-btn btn-view" onclick="viewDeviceDetails('${d.id}')" title="عرض التفاصيل والبطاقة التقنية">
             <i class="bi bi-file-earmark-text"></i>
           </button>
-          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canEdit))) ? `<button class="action-icon-btn btn-edit" onclick="openEditModal(${d.id})" title="تعديل"><i class="bi bi-pencil"></i></button>` : ''}
-          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canDelete))) ? `<button class="action-icon-btn btn-delete" onclick="openDeleteModal(${d.id}, '${d.employeeName}')" title="حذف"><i class="bi bi-trash"></i></button>` : ''}
+          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canEdit))) ? `<button class="action-icon-btn btn-edit" onclick="openEditModal('${d.id}')" title="تعديل"><i class="bi bi-pencil"></i></button>` : ''}
+          ${(currentUser && (currentUser.role === 'Admin' || (currentUser.permissions && currentUser.permissions.canDelete))) ? `<button class="action-icon-btn btn-delete" onclick="openDeleteModal('${d.id}', '${d.employeeName ? d.employeeName.replace(/'/g, "\\'") : ''}')" title="حذف"><i class="bi bi-trash"></i></button>` : ''}
         </div>
       </td>
     `;
@@ -613,7 +879,7 @@ function populateDeptFilter() {
   if (!filterDept) return;
   
   const savedVal = filterDept.value;
-  filterDept.innerHTML = '<option value="all">الكل</option>';
+  filterDept.innerHTML = '<option value="all">الكل (كافة الإدارات)</option>';
   
   const allDepts = new Set();
   
@@ -631,8 +897,19 @@ function populateDeptFilter() {
   }
   
   traverse(orgStructure, '');
+
+  // Also include any actual department from loaded devices
+  devices.forEach(d => {
+    if (d.department && d.department !== 'لا يوجد' && d.department !== 'لايوجد' && d.department.trim() !== '') {
+      allDepts.add(d.department.trim());
+    }
+    if (d.orgPath && d.orgPath !== 'مجلس الإدارة' && d.orgPath.trim() !== '') {
+      const cleanPath = d.orgPath.replace(/\s*\|\|\s*/g, ' || ');
+      allDepts.add(cleanPath);
+    }
+  });
   
-  Array.from(allDepts).sort().forEach(deptPath => {
+  Array.from(allDepts).sort((a, b) => a.localeCompare(b, 'ar')).forEach(deptPath => {
     const displayName = deptPath.replace(/\|\|/g, ' > ');
     filterDept.add(new Option(displayName, deptPath));
   });
@@ -681,10 +958,19 @@ function animateCounter(element, targetValue, duration = 700) {
 
 // UPDATE STATISTICS
 function updateStats() {
-  animateCounter(statTotalDevices, devices.length);
+  const actualDevices = devices.filter(d => d.assetType !== 'None' && d.deviceNature !== 'None');
+  const uniqueEmployees = new Set();
+  devices.forEach(d => {
+    if (d.employeeId && String(d.employeeId).trim() !== '') {
+      uniqueEmployees.add(String(d.employeeId).trim());
+    }
+  });
+
+  animateCounter(statTotalDevices, actualDevices.length);
+  if (statEmployees) animateCounter(statEmployees, uniqueEmployees.size);
   animateCounter(statDesktops, devices.filter(d => d.deviceNature === 'Desktop').length);
   animateCounter(statLaptops, devices.filter(d => d.deviceNature === 'Laptop').length);
-  animateCounter(statIssueDevices, devices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length);
+  animateCounter(statIssueDevices, actualDevices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length);
 }
 
 // CHARTS SYSTEM
@@ -726,7 +1012,8 @@ function renderCharts() {
       datasets: [{
         data: deptValues,
         backgroundColor: [
-          '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#f43f5e'
+          '#0077C8', '#F7941D', '#004A8F', '#1e9de8', '#e07b0e', '#0099E6', '#003570',
+          '#2bb5ff', '#ffa940', '#0060b0', '#f59e0b', '#003a7a', '#7bcfff'
         ],
         borderWidth: isDark ? 2 : 1,
         borderColor: isDark ? '#0f172a' : '#fff'
@@ -767,11 +1054,11 @@ function renderCharts() {
         label: 'عدد الأجهزة',
         data: [cleanCount, issueCount],
         backgroundColor: [
-          'rgba(16, 185, 129, 0.18)', 
-          'rgba(244, 63, 94, 0.18)'
+          'rgba(0, 119, 200, 0.22)', 
+          'rgba(244, 63, 94, 0.20)'
         ],
         borderColor: [
-          '#10b981', 
+          '#0077C8', 
           '#f43f5e'
         ],
         borderWidth: 1.5,
@@ -831,7 +1118,8 @@ function renderComparisons() {
   const checkboxes = document.querySelectorAll('.comp-metric-cb');
   const metrics = {
     has_computer: true,
-    has_monitor: true
+    has_monitor: true,
+    no_device: true
   };
   if (checkboxes.length > 0) {
     checkboxes.forEach(cb => {
@@ -861,11 +1149,15 @@ function renderComparisons() {
         totalMonitors: 0, 
         totalComputers: 0,
         desktopsCount: 0,
-        laptopsCount: 0 
+        laptopsCount: 0,
+        hasAnyRealDevice: false
       };
     }
     
     const nature = d.deviceNature || 'Desktop';
+    if (d.assetType !== 'None' && d.deviceNature !== 'None') {
+      employeeData[name].hasAnyRealDevice = true;
+    }
     if (d.assetType === 'Monitor' || nature === 'Monitor' || d.monitorsCount > 0) {
       employeeData[name].totalMonitors += (parseInt(d.monitorsCount) || 1);
     }
@@ -891,16 +1183,19 @@ function renderComparisons() {
   // 2. Calculate comparison groups and lists
   const listHasComputer = [];
   const listHasMonitor = [];
+  const listNoDevice = [];
 
   uniqueEmployees.forEach(emp => {
     if (emp.totalComputers >= 1) listHasComputer.push(emp.name);
     if (emp.totalMonitors >= 2) listHasMonitor.push(emp.name);
+    if (!emp.hasAnyRealDevice) listNoDevice.push(emp.name);
   });
 
   // Store lists in global state for modal reference
   window.comparisonLists = {
     'has_computer': { title: 'الموظفون الذين لديهم جهاز كمبيوتر أو أكثر', list: listHasComputer },
-    'has_monitor': { title: 'الموظفون الذين لديهم أكثر من شاشة', list: listHasMonitor }
+    'has_monitor': { title: 'الموظفون الذين لديهم أكثر من شاشة', list: listHasMonitor },
+    'no_device': { title: 'الموظفون الذين ليس لديهم أي جهاز', list: listNoDevice }
   };
   
   let gridHtml = '';
@@ -930,6 +1225,21 @@ function renderComparisons() {
             <div class="progress-bar bg-success" style="width: ${(listHasMonitor.length/totalEmployees)*100}%"></div>
           </div>
           <p class="count-text">${listHasMonitor.length} ${window.t ? window.t('comp_employee') : 'موظف'} (${((listHasMonitor.length/totalEmployees)*100).toFixed(1)}%)</p>
+        </div>
+      </div>
+    `;
+  }
+  
+  if (metrics.no_device) {
+    gridHtml += `
+      <div class="comparison-card" onclick="showCategoryEmployees('no_device')">
+        <div class="card-icon"><i class="bi bi-x-circle" style="color: var(--clr-danger, #f43f5e);"></i></div>
+        <div class="card-info">
+          <h4>من ليس لديه أي جهاز</h4>
+          <div class="progress-bar-container">
+            <div class="progress-bar bg-danger" style="width: ${(listNoDevice.length/totalEmployees)*100}%"></div>
+          </div>
+          <p class="count-text">${listNoDevice.length} ${window.t && typeof window.t === 'function' ? window.t('comp_employee') || 'موظف' : 'موظف'} (${((listNoDevice.length/totalEmployees)*100).toFixed(1)}%)</p>
         </div>
       </div>
     `;
@@ -992,6 +1302,14 @@ function filterTableByEmployee(name) {
   if (searchInput) {
     searchInput.value = name;
     
+    // Reset dropdown filters so the employee isn't filtered out
+    const filterDept = document.getElementById('filterDept');
+    const filterNature = document.getElementById('filterNature');
+    const filterStatus = document.getElementById('filterStatus');
+    if (filterDept) filterDept.value = 'all';
+    if (filterNature) filterNature.value = 'all';
+    if (filterStatus) filterStatus.value = 'all';
+
     // Apply search and filter
     applySearchAndFilters();
     
@@ -1003,76 +1321,310 @@ function filterTableByEmployee(name) {
   }
 }
 
+// ==========================================
+// ARABIC NORMALIZATION & SMART SEARCH HELPERS
+// ==========================================
+
+function normalizeArabic(text) {
+  if (text === null || text === undefined) return '';
+  return String(text)
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670]/g, '') // remove Arabic diacritics / tashkeel
+    .replace(/[أإآءئؤ]/g, 'ا')              // normalize alef and hamza variants
+    .replace(/ة/g, 'ه')                      // normalize teh marbuta
+    .replace(/[ىي]/g, 'ي')                   // normalize alef maqsura and yaa
+    .replace(/[\u0600-\u0605]/g, '')
+    .replace(/[\r\n\t]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function matchDeviceSearch(device, query) {
+  if (!query) return true;
+  const normQuery = normalizeArabic(query);
+  const queryTokens = normQuery.split(' ').filter(Boolean);
+  if (queryTokens.length === 0) return true;
+
+  // Compile all searchable fields
+  const haystack = [
+    device.employeeName,
+    device.employeeId,
+    device.orgPath,
+    device.department,
+    device.section,
+    device.unit,
+    device.sharedUsers,
+    device.deviceModel,
+    device.deviceNature,
+    device.assetType,
+    device.serviceTag,
+    device.ram,
+    device.storageType,
+    device.storageSize,
+    device.technicalStatus,
+    device.recurringIssues,
+    device.notes,
+    device.systemsUsed,
+    device.phone,
+    device.ipAddress,
+    device.osVersion,
+    device.connectionType,
+    device.monitorsCount ? `${device.monitorsCount} شاشة` : '',
+    device.monitorsCount ? `${device.monitorsCount} monitors` : ''
+  ];
+
+  if (Array.isArray(device.customFields)) {
+    device.customFields.forEach(cf => {
+      if (cf) {
+        if (cf.label) haystack.push(cf.label);
+        if (cf.value) haystack.push(cf.value);
+      }
+    });
+  }
+
+  if (Array.isArray(device.monitorsDetails)) {
+    device.monitorsDetails.forEach(m => {
+      if (m) {
+        if (m.manufacturer) haystack.push(m.manufacturer);
+        if (m.serviceTag) haystack.push(m.serviceTag);
+        if (m.size) haystack.push(m.size);
+      }
+    });
+  }
+
+  if (Array.isArray(device.dockingDetails)) {
+    device.dockingDetails.forEach(doc => {
+      if (doc && doc.serviceTag) haystack.push(doc.serviceTag);
+    });
+  }
+
+  const normHaystack = normalizeArabic(haystack.filter(Boolean).join(' '));
+  const rawAlphaHaystack = normHaystack.replace(/[^a-z0-9\u0621-\u064A]/g, '');
+
+  return queryTokens.every(token => {
+    if (normHaystack.includes(token)) return true;
+    const cleanToken = token.replace(/[^a-z0-9\u0621-\u064A]/g, '');
+    if (cleanToken && rawAlphaHaystack.includes(cleanToken)) return true;
+    return false;
+  });
+}
+
+function matchDeviceDept(device, deptVal) {
+  if (!deptVal || deptVal === 'all') return true;
+
+  const normDeptVal = normalizeArabic(deptVal).replace(/\s*\|\|\s*/g, '||').replace(/\s*>\s*/g, '||');
+  const dOrg = normalizeArabic(device.orgPath || '').replace(/\s*\|\|\s*/g, '||');
+  const dDept = normalizeArabic(device.department || '');
+  const dSec = normalizeArabic(device.section || '');
+  const dUnit = normalizeArabic(device.unit || '');
+
+  // 1. Direct or partial path inclusion
+  if (dOrg && (dOrg.includes(normDeptVal) || normDeptVal.includes(dOrg))) return true;
+
+  // 2. Direct check on individual attributes
+  if (dDept && (dDept === normDeptVal || normDeptVal.includes(dDept) || dDept.includes(normDeptVal))) return true;
+  if (dSec && (dSec === normDeptVal || normDeptVal.includes(dSec) || dSec.includes(normDeptVal))) return true;
+  if (dUnit && (dUnit === normDeptVal || normDeptVal.includes(dUnit) || dUnit.includes(normDeptVal))) return true;
+
+  // 3. Match against the target segment (last path element)
+  const segments = normDeptVal.split('||').map(s => s.trim()).filter(Boolean);
+  if (segments.length > 0) {
+    const target = segments[segments.length - 1];
+    if (dOrg.includes(target) || dDept.includes(target) || dSec.includes(target) || dUnit.includes(target)) {
+      return true;
+    }
+  }
+
+  // 4. Handle prefix differences e.g. "التجارية" vs "الإدارة التجارية"
+  const stripPrefix = s => s.replace(/^(الاداره|اداره|قسم|مكتب|وحده|دائره)\s+/, '').trim();
+  const strippedSelected = stripPrefix(normDeptVal);
+  const strippedDept = stripPrefix(dDept);
+  if (strippedSelected && strippedDept && (strippedSelected.includes(strippedDept) || strippedDept.includes(strippedSelected))) {
+    return true;
+  }
+
+  return false;
+}
+
+function matchDeviceNature(device, natureVal) {
+  if (!natureVal || natureVal === 'all') return true;
+
+  const rawNature = String(device.deviceNature || '').trim().toLowerCase();
+  const rawAsset = String(device.assetType || '').trim().toLowerCase();
+  const rawModel = String(device.deviceModel || '').trim().toLowerCase();
+  const target = natureVal.trim().toLowerCase();
+
+  if (target === 'desktop') {
+    return rawNature === 'desktop' || 
+           rawNature === 'مكتبي' || 
+           rawNature.includes('desktop') || 
+           rawNature.includes('مكتبي') ||
+           ((!rawNature || rawNature === 'computer') && rawAsset === 'computer');
+  }
+
+  if (target === 'laptop') {
+    return rawNature === 'laptop' || 
+           rawNature === 'محمول' || 
+           rawNature.includes('laptop') || 
+           rawNature.includes('محمول') || 
+           rawModel.includes('probook') || 
+           rawModel.includes('latitude') || 
+           rawModel.includes('macbook');
+  }
+
+  if (target === 'printer') {
+    return rawNature === 'printer' || 
+           rawAsset === 'printer' || 
+           rawNature.includes('طابعة') || 
+           rawNature.includes('printer') || 
+           rawModel.includes('laserjet') || 
+           rawModel.includes('printer') || 
+           rawModel.includes('hp laser');
+  }
+
+  if (target === 'fingerprint') {
+    return rawNature === 'fingerprint' || 
+           rawAsset === 'fingerprint' || 
+           rawNature.includes('بصمة') || 
+           rawModel.includes('fingerprint') || 
+           rawModel.includes('zkteco');
+  }
+
+  if (target === 'accesspoint') {
+    return rawNature === 'accesspoint' || 
+           rawAsset === 'accesspoint' || 
+           rawNature.includes('access') || 
+           rawNature.includes('بوينت') || 
+           rawNature.includes('ap') || 
+           rawModel.includes('access point') || 
+           rawModel.includes('unifi');
+  }
+
+  return rawNature === target || rawAsset === target;
+}
+
+function matchDeviceStatus(device, statusVal) {
+  if (!statusVal || statusVal === 'all') return true;
+
+  const rawStatus = String(device.technicalStatus || '').trim();
+  const rawIssues = String(device.recurringIssues || '').trim();
+
+  const hasIssueDescription = rawIssues && 
+    rawIssues !== 'لا توجد مشاكل حالياً' && 
+    rawIssues !== 'لا توجد مشاكل حاليا' && 
+    rawIssues !== 'لا توجد مشاكل' && 
+    rawIssues !== 'لا يوجد' && 
+    rawIssues !== 'لايوجد' && 
+    rawIssues !== 'سليم' && 
+    rawIssues.length > 2;
+
+  const isFaulty = rawStatus.includes('صيانة') || rawStatus.includes('عطل') || rawStatus.includes('مشكل') || hasIssueDescription;
+
+  if (statusVal === 'clean') {
+    return (rawStatus === 'سليم' || rawStatus === '' || !device.technicalStatus) && !hasIssueDescription;
+  }
+
+  if (statusVal === 'issues') {
+    return isFaulty;
+  }
+
+  if (statusVal === 'need_maint') {
+    return rawStatus.includes('بحاجة لصيانة') || rawStatus.includes('بحاجة');
+  }
+
+  if (statusVal === 'in_maint') {
+    return rawStatus.includes('تحت الصيانة') || rawStatus.includes('تحت');
+  }
+
+  return true;
+}
+
 // SEARCH & FILTERS IMPLEMENTATION
 function applySearchAndFilters() {
-  const query = searchInput.value.toLowerCase().trim();
-  const deptVal = filterDept.value;
-  const natureVal = filterNature.value;
-  const statusVal = filterStatus.value;
+  const query = searchInput ? searchInput.value.trim() : '';
+  const deptVal = filterDept ? filterDept.value : 'all';
+  const natureVal = filterNature ? filterNature.value : 'all';
+  const statusVal = filterStatus ? filterStatus.value : 'all';
+
+  // Toggle clear search button visibility
+  const clearBtn = document.getElementById('clearSearchBtn');
+  if (clearBtn) {
+    clearBtn.style.display = query ? 'block' : 'none';
+  }
 
   // Save state to localStorage for persistence
-  localStorage.setItem('ui_search', searchInput.value);
+  localStorage.setItem('ui_search', query);
   localStorage.setItem('ui_dept', deptVal);
   localStorage.setItem('ui_nature', natureVal);
   localStorage.setItem('ui_status', statusVal);
 
   filteredDevices = devices.filter(d => {
-    // Search filter
-    const matchQuery = !query || 
-      String(d.employeeName || '').toLowerCase().includes(query) ||
-      String(d.department || '').toLowerCase().includes(query) ||
-      String(d.section || '').toLowerCase().includes(query) ||
-      String(d.unit || '').toLowerCase().includes(query) ||
-      String(d.deviceModel || '').toLowerCase().includes(query) ||
-      String(d.deviceNature || '').toLowerCase().includes(query) ||
-      String(d.ram || '').toLowerCase().includes(query) ||
-      String(d.storageType || '').toLowerCase().includes(query) ||
-      String(d.storageSize || '').toLowerCase().includes(query) ||
-      String(d.serviceTag || '').toLowerCase().includes(query) ||
-      String(d.technicalStatus || '').toLowerCase().includes(query) ||
-      String(d.recurringIssues || '').toLowerCase().includes(query) ||
-      String(d.notes || '').toLowerCase().includes(query) ||
-      String(d.systemsUsed || '').toLowerCase().includes(query) ||
-      String(d.phone || '').toLowerCase().includes(query) ||
-      String(d.monitorsCount || '').toLowerCase().includes(query) ||
-      (d.customFields && d.customFields.some(cf => 
-        String(cf.label).toLowerCase().includes(query) || 
-        String(cf.value).toLowerCase().includes(query)
-      ));
-
-    // Dept filter
-    const matchDept = deptVal === 'all' || d.department === deptVal;
-
-    // Nature filter
-    const matchNature = natureVal === 'all' || d.deviceNature === natureVal;
-
-    // Status filter
-    const status = d.technicalStatus || 'سليم';
-    const matchStatus = statusVal === 'all' || 
-      (statusVal === 'clean' && status === 'سليم') || 
-      (statusVal === 'issues' && status !== 'سليم');
-
-    return matchQuery && matchDept && matchNature && matchStatus;
+    return matchDeviceSearch(d, query) &&
+           matchDeviceDept(d, deptVal) &&
+           matchDeviceNature(d, natureVal) &&
+           matchDeviceStatus(d, statusVal);
   });
+
+  // Sort by Employee ID (الرقم الوظيفي)
+  filteredDevices.sort((a, b) => {
+    const numA = parseInt(a.employeeId, 10);
+    const numB = parseInt(b.employeeId, 10);
+    if (!isNaN(numA) && !isNaN(numB)) {
+      return numA - numB;
+    }
+    return String(a.employeeId || '').localeCompare(String(b.employeeId || ''), 'ar');
+  });
+
+  // Update counter badge
+  const countBadge = document.getElementById('devicesFilterCount');
+  if (countBadge) {
+    if (query || deptVal !== 'all' || natureVal !== 'all' || statusVal !== 'all') {
+      countBadge.textContent = `${filteredDevices.length} من أصل ${devices.length} جهاز`;
+    } else {
+      countBadge.textContent = `${devices.length} جهاز`;
+    }
+  }
 
   renderTable();
 }
 
+function resetSearchAndFilters() {
+  if (searchInput) searchInput.value = '';
+  if (filterDept) filterDept.value = 'all';
+  if (filterNature) filterNature.value = 'all';
+  if (filterStatus) filterStatus.value = 'all';
+
+  const clearBtn = document.getElementById('clearSearchBtn');
+  if (clearBtn) clearBtn.style.display = 'none';
+
+  localStorage.removeItem('ui_search');
+  localStorage.removeItem('ui_dept');
+  localStorage.removeItem('ui_nature');
+  localStorage.removeItem('ui_status');
+
+  applySearchAndFilters();
+  showToast('تمت إعادة ضبط خيارات البحث والتصفية');
+}
+
 function restoreSearchAndFilters() {
   const savedSearch = localStorage.getItem('ui_search');
-  if (savedSearch !== null) searchInput.value = savedSearch;
+  if (savedSearch !== null && searchInput) {
+    searchInput.value = savedSearch;
+    const clearBtn = document.getElementById('clearSearchBtn');
+    if (clearBtn) clearBtn.style.display = savedSearch ? 'block' : 'none';
+  }
 
   const savedDept = localStorage.getItem('ui_dept');
-  if (savedDept !== null) {
+  if (savedDept !== null && filterDept) {
     const options = Array.from(filterDept.options).map(o => o.value);
     if (options.includes(savedDept)) filterDept.value = savedDept;
   }
 
   const savedNature = localStorage.getItem('ui_nature');
-  if (savedNature !== null) filterNature.value = savedNature;
+  if (savedNature !== null && filterNature) filterNature.value = savedNature;
 
   const savedStatus = localStorage.getItem('ui_status');
-  if (savedStatus !== null) filterStatus.value = savedStatus;
+  if (savedStatus !== null && filterStatus) filterStatus.value = savedStatus;
 }
 
 // TOAST NOTIFICATIONS
@@ -1186,11 +1738,30 @@ function setupEventListeners() {
   // Theme Toggle
   themeToggleBtn.addEventListener('click', toggleTheme);
 
-  // Live Filtering
-  searchInput.addEventListener('input', applySearchAndFilters);
-  filterDept.addEventListener('change', applySearchAndFilters);
-  filterNature.addEventListener('change', applySearchAndFilters);
-  filterStatus.addEventListener('change', applySearchAndFilters);
+  // Live Filtering with Debounce
+  if (searchInput) {
+    let searchDebounceTimeout = null;
+    searchInput.addEventListener('input', () => {
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = setTimeout(applySearchAndFilters, 120);
+    });
+  }
+  if (filterDept) filterDept.addEventListener('change', applySearchAndFilters);
+  if (filterNature) filterNature.addEventListener('change', applySearchAndFilters);
+  if (filterStatus) filterStatus.addEventListener('change', applySearchAndFilters);
+
+  // Clear Search button trigger
+  const clearSearchBtn = document.getElementById('clearSearchBtn');
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', () => {
+      if (searchInput) {
+        searchInput.value = '';
+        clearSearchBtn.style.display = 'none';
+        applySearchAndFilters();
+        searchInput.focus();
+      }
+    });
+  }
 
   // Form Modals
   openAddModalBtn.addEventListener('click', openAddModal);
@@ -1202,19 +1773,23 @@ function setupEventListeners() {
       const val = e.target.value.trim();
       const match = devices.find(d => d.employeeName === val);
       if (match) {
-        setOrgSelectValue('department', match.department);
-        setOrgSelectValue('circle', match.circle);
-        setOrgSelectValue('section', match.section);
-        setOrgSelectValue('unit', match.unit);
+        if (match.orgPath) {
+          setOrgSelectValue(match.orgPath);
+        }
+        const empIdInput = document.getElementById('employeeId');
+        if (empIdInput && match.employeeId) empIdInput.value = match.employeeId;
       }
     });
   }
 
   // Add Column modal trigger
-  document.getElementById('openAddColumnModalBtn').addEventListener('click', () => {
-    openModal('columnModal');
-    renderExistingColumns();
-  });
+  const addColBtn = document.getElementById('openAddColumnModalBtn');
+  if (addColBtn) {
+    addColBtn.addEventListener('click', () => {
+      openModal('columnModal');
+      renderExistingColumns();
+    });
+  }
 
   // Form submission
   deviceForm.addEventListener('submit', handleFormSubmit);
@@ -1326,12 +1901,16 @@ function openAddModal() {
   document.getElementById('connectionType').value = 'USB';
   toggleDeviceFields();
   renderFormCustomFields(null);
+  document.getElementById('monitorsCount').value = 1;
+  generateMonitorForms();
+  document.getElementById('dockingCount').value = 0;
+  generateDockingForms();
   openModal('deviceModal');
 }
 
 // EDIT DEVICE MODAL
 function openEditModal(id) {
-  const d = devices.find(x => x.id === id);
+  const d = devices.find(x => String(x.id) === String(id));
   if (!d) return;
 
   document.getElementById('modalTitle').textContent = 'تعديل بيانات الجهاز للعهدة';
@@ -1339,6 +1918,8 @@ function openEditModal(id) {
   
   document.getElementById('employeeName').value = d.employeeName || '';
   document.getElementById('employeeId').value = d.employeeId || '';
+  const sharedUsersInput = document.getElementById('sharedUsers');
+  if (sharedUsersInput) sharedUsersInput.value = d.sharedUsers || '';
   
   setOrgSelectValue(d.orgPath);
   
@@ -1366,6 +1947,29 @@ function openEditModal(id) {
   document.getElementById('storageType').value = d.storageType || 'SSD';
   document.getElementById('storageSize').value = d.storageSize || '';
   document.getElementById('monitorsCount').value = d.monitorsCount || 1;
+  generateMonitorForms();
+  if (d.monitorsDetails && Array.isArray(d.monitorsDetails)) {
+    d.monitorsDetails.forEach((mon, i) => {
+      const mfg = document.getElementById(`monitor_mfg_${i}`);
+      if (mfg) {
+        mfg.value = mon.manufacturer || '';
+        document.getElementById(`monitor_size_${i}`).value = mon.size || '';
+        document.getElementById(`monitor_tag_${i}`).value = mon.serviceTag || '';
+      }
+    });
+  }
+  document.getElementById('dockingCount').value = d.dockingCount || 0;
+  generateDockingForms();
+  if (d.dockingDetails && Array.isArray(d.dockingDetails)) {
+    d.dockingDetails.forEach((dock, i) => {
+      const mfg = document.getElementById(`docking_mfg_${i}`);
+      if (mfg) {
+        mfg.value = dock.manufacturer || '';
+        document.getElementById(`docking_model_${i}`).value = dock.model || '';
+        document.getElementById(`docking_tag_${i}`).value = dock.serviceTag || '';
+      }
+    });
+  }
   document.getElementById('phone').value = d.phone || '';
   document.getElementById('osVersion').value = d.osVersion || '';
   
@@ -1378,6 +1982,10 @@ function openEditModal(id) {
   renderFormCustomFields(d);
 
   toggleDeviceFields();
+  document.getElementById('monitorsCount').value = 1;
+  generateMonitorForms();
+  document.getElementById('dockingCount').value = 0;
+  generateDockingForms();
   openModal('deviceModal');
 }
 
@@ -1406,9 +2014,37 @@ async function handleFormSubmit(e) {
     }
   });
   
+  const monitorsDetails = [];
+  const mc = parseInt(document.getElementById('monitorsCount').value) || 0;
+  for (let i = 0; i < mc; i++) {
+    const mfg = document.getElementById(`monitor_mfg_${i}`);
+    if (mfg) {
+      monitorsDetails.push({
+        manufacturer: mfg.value.trim(),
+        size: document.getElementById(`monitor_size_${i}`).value.trim(),
+        serviceTag: document.getElementById(`monitor_tag_${i}`).value.trim()
+      });
+    }
+  }
+
+  const dockingDetails = [];
+  const dc = parseInt(document.getElementById('dockingCount').value) || 0;
+  for (let i = 0; i < dc; i++) {
+    const tag = document.getElementById(`docking_tag_${i}`);
+    if (tag) {
+      dockingDetails.push({
+        serviceTag: tag.value.trim()
+      });
+    }
+  }
+
   const payload = {
+    monitorsDetails: monitorsDetails,
+    dockingDetails: dockingDetails,
+    dockingCount: dc,
     employeeName: document.getElementById('employeeName').value.trim(),
     employeeId: document.getElementById('employeeId').value.trim(),
+    sharedUsers: document.getElementById('sharedUsers').value.trim(),
     orgPath: document.getElementById('orgPath').value.trim(),
     deviceNature: document.getElementById('assetType').value === 'Computer' ? document.getElementById('deviceNature').value : document.getElementById('assetType').value,
     deviceModel: document.getElementById('deviceModel').value.trim(),
@@ -1442,7 +2078,8 @@ async function handleFormSubmit(e) {
       body: JSON.stringify(payload)
     });
 
-    if (!res.ok) throw new Error('حدث خطأ أثناء الاتصال بالخادم لحفظ البيانات');
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'حدث خطأ أثناء الاتصال بالخادم لحفظ البيانات');
     
     showToast(isEdit ? 'تم تحديث بيانات العهدة بنجاح!' : 'تم إضافة الجهاز للعهدة بنجاح!');
     closeModal('deviceModal');
@@ -1480,7 +2117,7 @@ async function handleDeviceDelete() {
 
 // VIEW DETAILS CARD
 function viewDeviceDetails(id) {
-  const d = devices.find(x => x.id === id);
+  const d = devices.find(x => String(x.id) === String(id));
   if (!d) return;
 
   const hasIssues = checkDeviceHasIssues(d);
@@ -1599,10 +2236,11 @@ function viewDeviceDetails(id) {
                 <span class="tech-label">نظام التشغيل (OS):</span>
                 <span class="tech-val" style="color: var(--color-primary)">${d.osVersion || 'لا يوجد'}</span>
               </div>
+              ${d.deviceNature === 'Printer' ? `
               <div class="tech-item">
                 <span class="tech-label">طريقة التوصيل:</span>
                 <span class="tech-val">${d.connectionType === 'Network' ? 'شبكة سلكية' : d.connectionType === 'Wireless' ? 'شبكة لاسلكية' : 'USB'}</span>
-              </div>
+              </div>` : ''}
               ${d.ipAddress ? `
               <div class="tech-item">
                 <span class="tech-label">عنوان الـ IP:</span>
@@ -1640,6 +2278,17 @@ function viewDeviceDetails(id) {
       </div>
     </div>
   `;
+
+  const qrUrl = window.location.origin + '/?viewCard=' + d.id;
+  const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(qrUrl);
+  
+  const qrHtml = `
+    <div style="text-align: center; margin-top: 1.5rem;" class="print-qr-code">
+      <img src="${qrSrc}" alt="QR Code" style="width: 100px; height: 100px; border: 1px dashed #ccc; padding: 4px; border-radius: 6px; display: inline-block;">
+    </div>
+  `;
+  
+  detailBody.innerHTML = detailBody.innerHTML.replace('</div>\n    </div>', qrHtml + '\n      </div>\n    </div>');
 
   openModal('detailsModal');
 }
@@ -1941,8 +2590,8 @@ async function viewDeviceHistory(id) {
          // Admin actions HTML
          const actionsHtml = (currentUser && currentUser.role === 'Admin') ? `
             <td class="admin-only-element">
-              <button class="action-icon-btn btn-edit" onclick="openHistoryRecordModal(${h.id})" title="تعديل"><i class="bi bi-pencil-square"></i></button>
-              <button class="action-icon-btn btn-delete" onclick="deleteHistoryRecord(${h.id})" title="حذف"><i class="bi bi-trash"></i></button>
+              <button class="action-icon-btn btn-edit" onclick="openHistoryRecordModal('${h.id}')" title="تعديل"><i class="bi bi-pencil-square"></i></button>
+              <button class="action-icon-btn btn-delete" onclick="deleteHistoryRecord('${h.id}')" title="حذف"><i class="bi bi-trash"></i></button>
             </td>
          ` : '';
 
@@ -2173,7 +2822,7 @@ function openAddHistoryRecordModal() {
 }
 
 function openHistoryRecordModal(historyId) {
-  const h = currentHistoryData.find(x => x.id === historyId);
+  const h = currentHistoryData.find(x => String(x.id) === String(historyId));
   if (!h) return;
   
   document.getElementById('historyRecordForm').reset();
@@ -2198,7 +2847,34 @@ document.getElementById('historyRecordForm').addEventListener('submit', async (e
   const deviceId = document.getElementById('hr_deviceId').value;
   const historyId = document.getElementById('hr_historyId').value;
   
+  const monitorsDetails = [];
+  const mc = parseInt(document.getElementById('monitorsCount').value) || 0;
+  for (let i = 0; i < mc; i++) {
+    const mfg = document.getElementById(`monitor_mfg_${i}`);
+    if (mfg) {
+      monitorsDetails.push({
+        manufacturer: mfg.value.trim(),
+        size: document.getElementById(`monitor_size_${i}`).value.trim(),
+        serviceTag: document.getElementById(`monitor_tag_${i}`).value.trim()
+      });
+    }
+  }
+
+  const dockingDetails = [];
+  const dc = parseInt(document.getElementById('dockingCount').value) || 0;
+  for (let i = 0; i < dc; i++) {
+    const tag = document.getElementById(`docking_tag_${i}`);
+    if (tag) {
+      dockingDetails.push({
+        serviceTag: tag.value.trim()
+      });
+    }
+  }
+
   const payload = {
+    monitorsDetails: monitorsDetails,
+    dockingDetails: dockingDetails,
+    dockingCount: dc,
     previous_employee: document.getElementById('hr_prev_employee').value.trim(),
     previous_orgPath: document.getElementById('hr_prev_orgPath').value.trim(),
     new_employee: document.getElementById('hr_new_employee').value.trim(),
@@ -2219,6 +2895,7 @@ document.getElementById('historyRecordForm').addEventListener('submit', async (e
       body: JSON.stringify(payload)
     });
     const data = await res.json();
+
     if (res.ok) {
       showToast(data.message);
       closeModal('historyRecordModal');
@@ -2243,6 +2920,7 @@ async function deleteHistoryRecord(historyId) {
       }
     });
     const data = await res.json();
+
     if (res.ok) {
       showToast(data.message);
       viewDeviceHistory(currentHistoryDeviceId);
@@ -2338,4 +3016,369 @@ function renderDynamicCompOrgDropdowns(selectedPathArray) {
   if (orgPathInput) {
     orgPathInput.value = currentPath.join('||');
   }
+}
+
+
+// ==========================================
+// SYSTEM LOGS & NOTIFICATIONS
+// ==========================================
+let systemLogs = [];
+let unreadLogsCount = 0;
+
+async function fetchSystemLogs() {
+  if (!currentUser || (currentUser.role !== 'Admin' && !(currentUser.permissions && currentUser.permissions.canViewLogs))) return;
+  try {
+    const res = await fetch('/api/logs', {
+      headers: { 'Authorization': 'Bearer ' + localStorage.getItem('token') }
+    });
+    if (res.ok) {
+      systemLogs = await res.json();
+      renderNotificationsDropdown();
+    }
+  } catch (error) {
+    console.error('Failed to fetch system logs:', error);
+  }
+}
+
+function handleNewLogEvent(logData) {
+  systemLogs.unshift(logData);
+  if (systemLogs.length > 100) systemLogs.pop();
+  unreadLogsCount++;
+  updateNotificationDot();
+  renderNotificationsDropdown();
+  showToast('نشاط جديد: ' + getLogActionText(logData));
+}
+
+function updateNotificationDot() {
+  const dot = document.getElementById('notifDot');
+  if (dot) {
+    dot.style.display = unreadLogsCount > 0 ? 'block' : 'none';
+  }
+}
+
+function getLogActionText(log) {
+  let actionText = '';
+  if (log.action === 'add') actionText = 'إضافة';
+  else if (log.action === 'edit') actionText = 'تعديل';
+  else if (log.action === 'delete') actionText = 'حذف';
+  else if (log.action === 'import') actionText = 'استيراد';
+  else if (log.action === 'restore') actionText = 'استعادة';
+  else if (log.action === 'permanent_delete') actionText = 'حذف نهائي';
+  else if (log.action === 'edit_permissions') actionText = 'تعديل صلاحيات';
+  else if (log.action === 'delete_user') actionText = 'حذف حساب';
+  
+  let typeText = '';
+  if (log.entityType === 'device') typeText = 'جهاز';
+  else if (log.entityType === 'user') typeText = 'مستخدم';
+  
+  return actionText + ' ' + typeText + ' (' + log.entityName + ')';
+}
+
+function getLogIcon(action) {
+  if (action === 'add') return '<i class="bi bi-plus-circle-fill notif-add"></i>';
+  if (action === 'edit') return '<i class="bi bi-pencil-fill notif-edit"></i>';
+  if (action === 'delete') return '<i class="bi bi-trash-fill notif-delete"></i>';
+  if (action === 'import') return '<i class="bi bi-file-earmark-spreadsheet-fill notif-import"></i>';
+  if (action === 'restore') return '<i class="bi bi-arrow-counterclockwise" style="color:var(--color-success)"></i>';
+  if (action === 'permanent_delete') return '<i class="bi bi-x-octagon-fill" style="color:var(--color-danger)"></i>';
+  if (action === 'edit_permissions') return '<i class="bi bi-person-gear" style="color:var(--color-warning)"></i>';
+  if (action === 'delete_user') return '<i class="bi bi-person-x-fill" style="color:var(--color-danger)"></i>';
+  return '<i class="bi bi-info-circle-fill"></i>';
+}
+
+function renderNotificationsDropdown() {
+  const list = document.getElementById('notificationsList');
+  if (!list) return;
+  
+  if (systemLogs.length === 0) {
+    list.innerHTML = '<div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">لا توجد نشاطات مسجلة</div>';
+    return;
+  }
+  
+  let html = '';
+  const displayLogs = systemLogs.slice(0, 10);
+  displayLogs.forEach(log => {
+    const date = new Date(log.timestamp).toLocaleString('ar-LY', { hour12: true, month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    html += '<div class="notif-item">' +
+      '<div class="notif-icon">' + getLogIcon(log.action) + '</div>' +
+      '<div class="notif-content">' +
+        '<div>' + getLogActionText(log) + ' بواسطة <strong>' + log.username + '</strong></div>' +
+        '<span class="notif-time">' + date + '</span>' +
+      '</div>' +
+    '</div>';
+  });
+  list.innerHTML = html;
+}
+
+function renderSystemLogsTable() {
+  const tbody = document.getElementById('systemLogsTableBody');
+  if (!tbody) return;
+  
+  if (systemLogs.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">لا توجد نشاطات مسجلة</td></tr>';
+    return;
+  }
+  
+  let html = '';
+  systemLogs.forEach(log => {
+    const date = new Date(log.timestamp).toLocaleString('ar-LY');
+    let actionHtml = '';
+    if (log.action === 'add') actionHtml = '<span class="badge bg-success">إضافة</span>';
+    else if (log.action === 'edit') actionHtml = '<span class="badge bg-warning text-dark">تعديل</span>';
+    else if (log.action === 'delete') actionHtml = '<span class="badge bg-danger">حذف</span>';
+    else if (log.action === 'import') actionHtml = '<span class="badge bg-info">استيراد</span>';
+    else if (log.action === 'restore') actionHtml = '<span class="badge bg-success">استعادة</span>';
+    else if (log.action === 'permanent_delete') actionHtml = '<span class="badge bg-danger">حذف نهائي</span>';
+    else if (log.action === 'edit_permissions') actionHtml = '<span class="badge bg-warning text-dark">تعديل صلاحيات</span>';
+    else if (log.action === 'delete_user') actionHtml = '<span class="badge bg-danger">حذف حساب</span>';
+    
+    let typeHtml = log.entityType === 'device' ? 'جهاز' : 'مستخدم';
+    
+    html += '<tr>' +
+      '<td dir="ltr" style="text-align: right;">' + date + '</td>' +
+      '<td>' + actionHtml + '</td>' +
+      '<td>' + typeHtml + '</td>' +
+      '<td>' + log.entityName + '</td>' +
+      '<td>' + log.username + '</td>' +
+    '</tr>';
+  });
+  tbody.innerHTML = html;
+}
+
+const notifBtn = document.getElementById('notificationsBtn');
+const dropdown = document.getElementById('notificationsDropdown');
+const viewAllBtn = document.getElementById('viewAllLogsBtn');
+const closeNotifBtn = document.getElementById('closeNotifDropdownBtn');
+
+function openDropdown() {
+  if (!dropdown) return;
+  dropdown.classList.add('notif-open');
+  if (typeof unreadLogsCount !== 'undefined') {
+    unreadLogsCount = 0;
+    updateNotificationDot();
+  }
+}
+
+function closeDropdown() {
+  if (!dropdown) return;
+  dropdown.classList.remove('notif-open');
+}
+
+if (notifBtn && dropdown) {
+  notifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (dropdown.classList.contains('notif-open')) {
+      closeDropdown();
+    } else {
+      openDropdown();
+    }
+  });
+
+  document.addEventListener('click', (e) => {
+    if (!dropdown.contains(e.target) && !notifBtn.contains(e.target)) {
+      closeDropdown();
+    }
+  });
+}
+
+if (closeNotifBtn) {
+  closeNotifBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeDropdown();
+  });
+}
+
+if (viewAllBtn) {
+  viewAllBtn.addEventListener('click', () => {
+    closeDropdown();
+    renderSystemLogsTable();
+    openModal('systemLogsModal');
+  });
+}
+
+
+
+// ==========================================
+// RECYCLE BIN (SOFT DELETE) LOGIC
+// ==========================================
+
+const openRecycleBinBtn = document.getElementById('openRecycleBinBtn');
+if (openRecycleBinBtn) {
+  openRecycleBinBtn.addEventListener('click', () => {
+    openModal('recycleBinModal');
+    fetchRecycleBin();
+  });
+}
+
+async function fetchRecycleBin() {
+  const tbody = document.getElementById('recycleBinTableBody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">جاري التحميل...</td></tr>';
+  
+  try {
+    const res = await fetch('/api/devices/recycle-bin');
+    if (!res.ok) {
+      if (res.status === 403) throw new Error('غير مصرح');
+      throw new Error('حدث خطأ أثناء جلب سلة المهملات');
+    }
+    const devices = await res.json();
+    
+    if (devices.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" style="text-align: center;">سلة المهملات فارغة</td></tr>';
+      return;
+    }
+    
+    let html = '';
+    devices.forEach(d => {
+      const deletedAt = d.deletedAt ? new Date(d.deletedAt).toLocaleString('ar-LY') : 'غير معروف';
+      html += '<tr>' +
+        '<td dir="ltr" style="text-align: right;">' + deletedAt + '</td>' +
+        '<td>' + (d.deletedBy || 'غير معروف') + '</td>' +
+        '<td>' + (d.employeeName || '') + '</td>' +
+        '<td>' + ((d.orgPath && d.orgPath.split('||')[0]) || d.department || '') + '</td>' +
+        '<td>' +
+          '<button class="action-btn btn-success" style="padding: 4px 8px; margin-left: 5px;" onclick="restoreDevice(\'' + d.id + '\')" title="استرجاع الجهاز"><i class="bi bi-arrow-counterclockwise"></i></button>' +
+          (currentUser && currentUser.role === 'Admin' ? '<button class="action-btn btn-danger" style="padding: 4px 8px;" onclick="permanentDeleteDevice(\'' + d.id + '\')" title="حذف نهائي"><i class="bi bi-trash-fill"></i></button>' : '') +
+        '</td>' +
+      '</tr>';
+    });
+    tbody.innerHTML = html;
+  } catch (error) {
+    tbody.innerHTML = '<tr><td colspan="5" style="text-align: center; color: var(--danger-color);">' + error.message + '</td></tr>';
+  }
+}
+
+window.restoreDevice = async function(id) {
+  if (!confirm('هل أنت متأكد من استرجاع هذا الجهاز؟')) return;
+  try {
+    const res = await fetch('/api/devices/' + id + '/restore', { method: 'POST' });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(data.message);
+      fetchRecycleBin();
+      fetchDevices();
+    } else {
+      alert(data.error);
+    }
+  } catch (error) {
+    alert('حدث خطأ أثناء الاسترجاع');
+  }
+};
+
+window.permanentDeleteDevice = async function(id) {
+  if (!confirm('تحذير: سيتم مسح هذا الجهاز وتاريخه نهائياً ولا يمكن التراجع عن ذلك! هل أنت متأكد؟')) return;
+  try {
+    const res = await fetch('/api/devices/' + id + '/permanent', { method: 'DELETE' });
+    const data = await res.json();
+
+    if (res.ok) {
+      showToast(data.message);
+      fetchRecycleBin();
+    } else {
+      alert(data.error);
+    }
+  } catch (error) {
+    alert('حدث خطأ أثناء الحذف النهائي');
+  }
+};
+
+
+function generateMonitorForms() {
+  const count = parseInt(document.getElementById('monitorsCount').value) || 0;
+  const container = document.getElementById('monitorsDetailsContainer');
+  if (!container) return;
+  
+  const existingData = [];
+  const currentForms = container.querySelectorAll('.monitor-form');
+  currentForms.forEach((form, index) => {
+    existingData.push({
+      manufacturer: document.getElementById(`monitor_mfg_${index}`).value,
+      size: document.getElementById(`monitor_size_${index}`).value,
+      serviceTag: document.getElementById(`monitor_tag_${index}`).value
+    });
+  });
+
+  container.innerHTML = '';
+  if (count <= 0) return;
+
+  for (let i = 0; i < count; i++) {
+    const data = existingData[i] || { manufacturer: '', size: '', serviceTag: '' };
+    const div = document.createElement('div');
+    div.className = 'monitor-form form-group';
+    div.style.background = 'var(--bg-card)';
+    div.style.padding = '10px';
+    div.style.borderRadius = '6px';
+    div.style.border = '1px solid var(--border)';
+    
+    div.innerHTML = `
+      <h5 style="margin-top: 0; margin-bottom: 10px; font-size: 0.9rem; color: var(--text-muted);">تفاصيل الشاشة رقم ${i + 1}</h5>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px;">
+        <div>
+          <label style="font-size: 0.8rem; margin-bottom: 4px;">الشركة المصنعة</label>
+          <input type="text" id="monitor_mfg_${i}" placeholder="مثال: Dell" value="${data.manufacturer}" style="padding: 6px; font-size: 0.85rem;">
+        </div>
+        <div>
+          <label style="font-size: 0.8rem; margin-bottom: 4px;">الحجم</label>
+          <input type="text" id="monitor_size_${i}" placeholder="مثال: 24 بوصة" value="${data.size}" style="padding: 6px; font-size: 0.85rem;">
+        </div>
+        <div>
+          <label style="font-size: 0.8rem; margin-bottom: 4px;">السيرفز تاق</label>
+          <input type="text" id="monitor_tag_${i}" placeholder="SN أو Service Tag" value="${data.serviceTag}" style="padding: 6px; font-size: 0.85rem;">
+        </div>
+      </div>
+    `;
+    container.appendChild(div);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  const m = document.getElementById('monitorsCount');
+  if (m) m.addEventListener('input', generateMonitorForms);
+});
+
+
+function generateDockingForms() {
+  const count = parseInt(document.getElementById('dockingCount').value) || 0;
+  const container = document.getElementById('dockingDetailsContainer');
+  if (!container) return;
+  
+  const existingData = [];
+  const currentForms = container.querySelectorAll('.docking-form');
+  currentForms.forEach((form, index) => {
+    existingData.push({
+      
+      
+      serviceTag: document.getElementById(`docking_tag_${index}`).value
+    });
+  });
+
+  container.innerHTML = '';
+  if (count <= 0) return;
+
+  for (let i = 0; i < count; i++) {
+    const data = existingData[i] || { serviceTag: '' };
+    const div = document.createElement('div');
+    div.className = 'docking-form form-group';
+    div.style.background = 'var(--bg-card)';
+    div.style.padding = '10px';
+    div.style.borderRadius = '6px';
+    div.style.border = '1px solid var(--border)';
+    
+    div.innerHTML = `
+      <h5 style="margin-top: 0; margin-bottom: 10px; font-size: 0.9rem; color: var(--text-muted);">تفاصيل الدوك ستيشن رقم ${i + 1}</h5>
+      <div style="display: flex; flex-direction: column; gap: 5px;">
+        <label style="font-size: 0.8rem; margin-bottom: 4px;">السيرفز تاق</label>
+        <input type="text" id="docking_tag_${i}" placeholder="SN أو Service Tag" value="${data.serviceTag}" style="padding: 6px; font-size: 0.85rem; width: 100%;">
+      </div>
+    `;
+    container.appendChild(div);
+  }
+}
+
+
+const d_global = document.getElementById('dockingCount');
+if (d_global) {
+  d_global.addEventListener('input', generateDockingForms);
+  d_global.addEventListener('change', generateDockingForms);
 }

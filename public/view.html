@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بطاقة مواصفات العهدة التقنية - LITC</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+  
+  <style>
+    body {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      background-color: #07101e;
+      padding: 20px;
+      font-family: 'Cairo', sans-serif;
+      margin: 0;
+    }
+    .view-container {
+      width: 100%;
+      max-width: 600px;
+      background: rgba(10, 26, 58, 0.9);
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .view-header {
+      background: linear-gradient(135deg, #0077C8, #004A8F);
+      color: white;
+      padding: 20px;
+      text-align: center;
+      position: relative;
+    }
+    .view-header h2 {
+      margin: 0;
+      font-size: 1.5rem;
+      font-weight: 700;
+    }
+    .view-header p {
+      margin: 5px 0 0;
+      opacity: 0.9;
+    }
+    .view-body {
+      padding: 20px;
+      color: #e8f0fb;
+    }
+    .btn-login {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(255,255,255,0.2);
+      color: white;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: background 0.3s;
+    }
+    .btn-login:hover {
+      background: rgba(255,255,255,0.3);
+      color: white;
+    }
+    .tech-row {
+      background: rgba(6, 14, 34, 0.5);
+      padding: 10px 15px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(255, 255, 255, 0.03);
+    }
+    .tech-row span:first-child {
+      font-size: 0.85rem;
+      color: #7b93b8;
+      margin-bottom: 4px;
+    }
+    .tech-row span:last-child {
+      font-weight: 600;
+      font-size: 1rem;
+    }
+  </style>
+</head>
+<body class="dark-theme">
+  
+  <div class="view-container">
+    <div class="view-header">
+      <a href="/login.html" class="btn-login"><i class="bi bi-box-arrow-in-right"></i> دخول المشرفين</a>
+      <h2>تفاصيل العهدة التقنية</h2>
+      <p id="deviceSubtitle">جاري التحميل...</p>
+    </div>
+    <div class="view-body" id="detailBody">
+      <div style="text-align:center; padding: 40px;">
+        <i class="bi bi-arrow-repeat" style="font-size: 3rem; animation: spin 1s linear infinite;"></i>
+        <p>جاري جلب البيانات...</p>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const urlParams = new URLSearchParams(window.location.search);
+    const deviceId = urlParams.get('id');
+    
+    if (!deviceId) {
+      document.getElementById('detailBody').innerHTML = '<div style="text-align:center; padding: 40px; color: #f43f5e;"><i class="bi bi-exclamation-triangle" style="font-size: 3rem;"></i><p>رابط غير صحيح.</p></div>';
+      document.getElementById('deviceSubtitle').textContent = 'خطأ';
+    } else {
+      fetch('/api/public/devices/' + deviceId)
+        .then(res => {
+          if (!res.ok) throw new Error('Device not found');
+          return res.json();
+        })
+        .then(d => {
+          document.getElementById('deviceSubtitle').textContent = (d.employeeName || 'بدون اسم') + (d.employeeId ? ' (' + d.employeeId + ')' : '');
+          
+          let techStatusHtml = '';
+          if (d.technicalStatus && d.technicalStatus !== 'سليم' && d.technicalStatus !== 'ممتاز') {
+            techStatusHtml = `
+              <div class="tech-row" style="grid-column: 1 / -1; background: rgba(247,148,29,0.1); border-color: rgba(247,148,29,0.3);">
+                <span style="color: #F7941D;"><i class="bi bi-exclamation-triangle"></i> الحالة الفنية:</span>
+                <span>${d.technicalStatus}</span>
+              </div>`;
+          } else {
+             techStatusHtml = `
+              <div class="tech-row" style="grid-column: 1 / -1; background: rgba(16,185,129,0.1); border-color: rgba(16,185,129,0.3);">
+                <span style="color: #10b981;"><i class="bi bi-check-circle"></i> الحالة الفنية:</span>
+                <span>سليم - لا توجد أعطال مسجلة</span>
+              </div>`;
+          }
+
+          let assetTypeLabel = d.assetType === 'Computer' ? 'جهاز كمبيوتر' : d.assetType === 'Printer' ? 'طابعة' : 'غير محدد';
+          if (d.assetType === 'Computer' && d.deviceNature) {
+            assetTypeLabel = d.deviceNature === 'Laptop' ? 'جهاز محمول (Laptop)' : 'جهاز مكتبي (Desktop)';
+          }
+
+          document.getElementById('detailBody').innerHTML = `
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+              <div class="tech-row"><span>نوع الجهاز:</span> <span>${assetTypeLabel}</span></div>
+              <div class="tech-row"><span>الموديل:</span> <span>${d.deviceModel || 'غير محدد'}</span></div>
+              <div class="tech-row"><span>الرقم التسلسلي (SN):</span> <span>${d.serviceTag || 'غير محدد'}</span></div>
+              <div class="tech-row"><span>الإدارة / القسم:</span> <span>${d.orgPath ? d.orgPath.split('||').pop() : 'غير محدد'}</span></div>
+              
+              ${d.assetType === 'Computer' ? `
+                <div class="tech-row"><span>المعالج (CPU):</span> <span>${d.cpu || 'غير محدد'}</span></div>
+                <div class="tech-row"><span>الذاكرة (RAM):</span> <span>${d.ram || 'غير محدد'}</span></div>
+              ` : ''}
+              
+              ${techStatusHtml}
+            </div>
+          `;
+        })
+        .catch(err => {
+          document.getElementById('detailBody').innerHTML = '<div style="text-align:center; padding: 40px; color:#f43f5e;"><i class="bi bi-x-circle" style="font-size: 3rem;"></i><p>الجهاز غير موجود أو تم حذفه.</p></div>';
+          document.getElementById('deviceSubtitle').textContent = 'خطأ';
+        });
+    }
+  </script>
+</body>
+</html>

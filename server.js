@@ -150,7 +150,7 @@ async function initDb() {
   const adminExists = await dbGet(`SELECT * FROM users WHERE username = 'admin'`);
   if (!adminExists) {
     const hashed = hashPassword('admin2026');
-    await dbRun(`INSERT INTO users (username, password, role) VALUES (?, ?, ?)`, ['admin', hashed, 'Admin']);
+    await dbRun(`INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)`, ['admin', hashed, 'Admin']);
     console.log("Default admin account created: admin / admin2026");
   }
 
@@ -241,6 +241,25 @@ function requireAdmin(req, res, next) {
   });
 }
 
+
+function requirePermission(perm) {
+  return function(req, res, next) {
+    authenticateToken(req, res, () => {
+      if (req.user.role === 'Admin') return next();
+      
+      let perms = req.user.permissions;
+      if (typeof perms === 'string') {
+        try { perms = JSON.parse(perms); } catch(e) { perms = {}; }
+      }
+      
+      if (perms && perms[perm]) {
+        return next();
+      }
+      return res.status(403).json({ error: 'غير مصرح: لا تملك الصلاحية للقيام بهذه العملية' });
+    });
+  };
+}
+
 // ==========================================
 // SSE - REAL-TIME UPDATES
 // ==========================================
@@ -318,9 +337,9 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role }, JWT_SECRET, { expiresIn: '24h' });
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '24h' });
     res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 24 * 60 * 60 * 1000 });
-    res.json({ success: true, user: { username: user.username, role: user.role } });
+    res.json({ success: true, user: { username: user.username, role: user.role, permissions: user.permissions } });
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
@@ -355,7 +374,7 @@ app.get('/api/auth/me', (req, res) => {
 // Get all users
 app.get('/api/admin/users', requireAdmin, async (req, res) => {
   try {
-    const users = await dbAll(`SELECT id, username, role FROM users`);
+    const users = await dbAll(`SELECT id, username, role, permissions FROM users`);
     res.json(users);
   } catch (error) {
     res.status(500).json({ error: 'فشل في جلب المستخدمين' });
@@ -364,7 +383,7 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
 
 // Add user
 app.post('/api/admin/users', requireAdmin, async (req, res) => {
-  const { username, password, role } = req.body;
+  const { username, password, role, permissions } = req.body;
   if (!username || !password || !role) {
     return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
   }
@@ -375,7 +394,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
 
   try {
     const hashed = hashPassword(password);
-    await dbRun(`INSERT INTO users (username, password, role) VALUES (?, ?, ?)`, [username.trim(), hashed, role]);
+    await dbRun(`INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)`, [username.trim(), hashed, role, JSON.stringify(permissions || {})]);
     res.status(201).json({ success: true, message: 'تم إضافة المستخدم بنجاح' });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
@@ -447,6 +466,61 @@ app.get('/api/devices/:id/history', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error("Get history error:", error);
     res.status(500).json({ error: 'حدث خطأ أثناء جلب سجل الجهاز' });
+  }
+});
+
+
+// Manually add history record (Admin only)
+app.post('/api/devices/:id/history', requireAdmin, async (req, res) => {
+  const device_id = parseInt(req.params.id);
+  const { previous_employee, previous_orgPath, new_employee, new_orgPath, timestamp } = req.body;
+  try {
+    await dbRun(`
+      INSERT INTO device_history (
+        device_id, previous_employee, previous_orgPath,
+        new_employee, new_orgPath, timestamp, changed_by
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      device_id, previous_employee, previous_orgPath,
+      new_employee, new_orgPath, timestamp, req.user.username
+    ]);
+    res.json({ success: true, message: 'تمت إضافة سجل الحركة بنجاح' });
+  } catch (error) {
+    console.error("Add history error:", error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إضافة السجل' });
+  }
+});
+
+// Edit history record (Admin only)
+app.put('/api/devices/:id/history/:historyId', requireAdmin, async (req, res) => {
+  const history_id = parseInt(req.params.historyId);
+  const { previous_employee, previous_orgPath, new_employee, new_orgPath, timestamp } = req.body;
+  try {
+    await dbRun(`
+      UPDATE device_history SET
+        previous_employee = ?, previous_orgPath = ?,
+        new_employee = ?, new_orgPath = ?, timestamp = ?, changed_by = ?
+      WHERE id = ?
+    `, [
+      previous_employee, previous_orgPath,
+      new_employee, new_orgPath, timestamp, req.user.username, history_id
+    ]);
+    res.json({ success: true, message: 'تم تعديل السجل بنجاح' });
+  } catch (error) {
+    console.error("Edit history error:", error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تعديل السجل' });
+  }
+});
+
+// Delete history record (Admin only)
+app.delete('/api/devices/:id/history/:historyId', requireAdmin, async (req, res) => {
+  const history_id = parseInt(req.params.historyId);
+  try {
+    await dbRun(`DELETE FROM device_history WHERE id = ?`, [history_id]);
+    res.json({ success: true, message: 'تم حذف السجل بنجاح' });
+  } catch (error) {
+    console.error("Delete history error:", error);
+    res.status(500).json({ error: 'حدث خطأ أثناء حذف السجل' });
   }
 });
 
@@ -544,7 +618,7 @@ app.delete('/api/columns/:id', requireAdmin, async (req, res) => {
 });
 
 // Add device (Admin only)
-app.post('/api/devices', requireAdmin, async (req, res) => {
+app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
   try {
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
@@ -592,7 +666,7 @@ app.post('/api/devices', requireAdmin, async (req, res) => {
 });
 
 // Edit device (Admin only)
-app.put('/api/devices/:id', requireAdmin, async (req, res) => {
+app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
   const id = parseInt(req.params.id);
   try {
     const device = await dbGet(`SELECT * FROM devices WHERE id = ?`, [id]);
@@ -684,7 +758,7 @@ app.put('/api/devices/:id', requireAdmin, async (req, res) => {
 });
 
 // Delete device (Admin only)
-app.delete('/api/devices/:id', requireAdmin, async (req, res) => {
+app.delete('/api/devices/:id', requirePermission('canDelete'), async (req, res) => {
   const id = parseInt(req.params.id);
   try {
     const device = await dbGet(`SELECT * FROM devices WHERE id = ?`, [id]);
@@ -818,10 +892,10 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
 
     const standardHeaders = [
       "اسم الموظف", "الاسم", "الإدارة", "القسم", "الوحدة", "نوع الجهاز",
-      "سعة الرام (RAM)", "سعة الرام", "نوع الهاردسك", "حجم الهاردسك",
+      "سعة الرام (RAM)", "سعة الرام", "حجم الرام", "نوع الهاردسك", "حجم الهاردسك",
       "عدد الشاشات", "طبيعة الجهاز", "السيرفس تاق (Service Tag)", "السيرفس تاق",
-      "السيريال ماي [Service Tag]", "الحالة التقنية", "المشاكل المتكررة", "الملاحظات", "ملاحظات", "الأنظمة والمنظومات المستخدمة",
-      "الأنظمة والمستلزمات المستخدمة", "الهاتف / الملحقات", "الهاتف", "هاتف", "تليفون",
+      "السيريال ماي [Service Tag]", "السيرفر تاق", "الحالة التقنية", "المشاكل المتكررة", "المشاكل", "الملاحظات", "ملاحظات", "الأنظمة والمنظومات المستخدمة",
+      "الأنظمة والمستلزمات المستخدمة", "الهاتف / الملحقات", "الهاتف", "هاتف", "تليفون", "الهاتف الداخلي",
       "مجلس الإدارة / المكاتب", "الرقم الوظيفي", "رقم الموظف"
     ];
 
@@ -862,18 +936,18 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       const section = getValue(["القسم"], 2);
       const unit = getValue(["الوحدة"], 3);
       const deviceModel = getValue(["نوع الجهاز"], 4);
-      const ram = getValue(["سعة الرام (RAM)", "سعة الرام"], 5);
+      const ram = getValue(["سعة الرام (RAM)", "سعة الرام", "حجم الرام"], 5);
       const storageType = getValue(["نوع الهاردسك"], 6);
       const storageSize = getValue(["حجم الهاردسك"], 7);
       const rawMonitors = getValue(["عدد الشاشات"], 8);
       const monitorsCount = parseInt(rawMonitors) || 1;
       const deviceNature = getValue(["طبيعة الجهاز"], 9);
-      const serviceTag = getValue(["السيرفس تاق (Service Tag)", "السيرفس تاق", "السيريال ماي [Service Tag]"], 10);
+      const serviceTag = getValue(["السيرفس تاق (Service Tag)", "السيرفس تاق", "السيريال ماي [Service Tag]", "السيرفر تاق"], 10);
       const technicalStatus = getValue(["الحالة التقنية"], 11) || 'سليم';
-      const recurringIssues = getValue(["المشاكل المتكررة"], 12);
+      const recurringIssues = getValue(["المشاكل المتكررة", "المشاكل"], 12);
       const notes = getValue(["الملاحظات", "ملاحظات"], 13);
       const systemsUsed = getValue(["الأنظمة والمنظومات المستخدمة", "الأنظمة والمستلزمات المستخدمة"], 14);
-      const phone = getValue(["الهاتف / الملحقات", "هاتف", "تليفون"], 15);
+      const phone = getValue(["الهاتف / الملحقات", "هاتف", "تليفون", "الهاتف الداخلي"], 15);
       
       let paths = [];
       if (topLevel && topLevel !== 'لا يوجد') paths.push(topLevel);

@@ -15,16 +15,36 @@
   <!-- Phosphor Icons for additional modern icons -->
   <script src="https://unpkg.com/@phosphor-icons/web"></script>
   <!-- Custom Stylesheet -->
-  <link rel="stylesheet" href="css/styles.css?v=2026">
+  <link rel="stylesheet" href="css/styles_v2.css?v=3">
   <!-- Design Compat Layer -->
   <link rel="stylesheet" href="css/corporate-ui.css?v=3">
   <!-- Translations & Initialization -->
   <script src="js/i18n.js?v=19" defer></script>
   <!-- Main Logic -->
-  <script src="js/app.js?v=2026" defer></script>
+  <script src="js/app.js?v=2051" defer></script>
   
   <!-- 2026 Inline Enhancement Styles -->
   <style>
+    /* Notifications */
+    .notif-dot { position: absolute; top: 0; right: 0; width: 10px; height: 10px; background: red; border-radius: 50%; }
+    .notifications-dropdown {
+      display: none; /* hidden by default */
+      position: fixed; top: 72px; left: auto; right: 1.5rem; width: 320px; max-height: 420px;
+      background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.35); z-index: 99999; flex-direction: column; overflow: hidden;
+    }
+    .notifications-dropdown.notif-open { display: flex; }
+    .notif-header { padding: 10px 15px; border-bottom: 1px solid var(--border-color); display: flex; justify-content: space-between; align-items: center; background: var(--header-bg); }
+    .notif-header h4 { margin: 0; font-size: 0.95rem; }
+    .notif-list { flex-grow: 1; overflow-y: auto; max-height: 350px; }
+    .notif-item { padding: 12px 15px; border-bottom: 1px solid var(--border-color); font-size: 0.85rem; line-height: 1.4; display: flex; gap: 10px; }
+    .notif-item:last-child { border-bottom: none; }
+    .notif-item:hover { background: var(--bg-color); }
+    .notif-icon { font-size: 1.2rem; }
+    .notif-content { flex-grow: 1; }
+    .notif-time { font-size: 0.75rem; color: var(--text-muted); display: block; margin-top: 4px; }
+    .notif-add { color: #10b981; } .notif-edit { color: #f59e0b; } .notif-delete { color: #ef4444; } .notif-import { color: #3b82f6; }
+
     /* Comparison filters: glass card style */
     .comparison-filters {
       background: var(--bg-card) !important;
@@ -111,13 +131,11 @@
   <div class="app-container">
     <!-- Header -->
     <header class="app-header">
-      <div class="header-logo">
-        <div class="logo-icon">
-          <i class="bi bi-cpu-fill"></i>
-        </div>
-        <div class="logo-text">
-          <h1>مراقب الأصول التقنية</h1>
-          <p>Technical Asset Monitor</p>
+      <div class="header-logo" style="display:flex; align-items:center; gap:14px;">
+        <img src="images/litc_logo.png" alt="LITC Logo" style="height:44px; object-fit:contain; filter: brightness(1.1);">
+        <div class="logo-text" style="border-right: 2px solid rgba(247,148,29,0.5); padding-right: 14px; margin-right: 2px;">
+          <h1 style="font-size:1.05rem; font-weight:700; color: var(--tx-main);">مراقب الأصول التقنية</h1>
+          <p style="font-size:0.72rem; color: var(--clr-accent); font-weight:500; letter-spacing:0.5px;">Technical Asset Monitor</p>
         </div>
       </div>
       
@@ -148,6 +166,18 @@ document.addEventListener('DOMContentLoaded', async () => {
           </script>
           <span class="user-role-badge" id="userRoleBadge"></span>
           <span class="user-name-text" id="userNameText"></span>
+          
+          <!-- Notifications Wrapper (Button only) -->
+          <div id="notificationsWrapper" class="notifications-wrapper" style="position: relative; margin: 0 5px; display: none;">
+            <button id="notificationsBtn" class="action-btn circle-btn" title="التنبيهات">
+              <i class="bi bi-bell-fill"></i>
+              <span id="notifDot" class="notif-dot" style="display: none;"></span>
+            </button>
+          </div>
+
+          <button id="openRecycleBinBtn" class="action-btn circle-btn" title="سلة المهملات" style="display: none;">
+            <i class="bi bi-trash-fill"></i>
+          </button>
           <button id="openUserManagementBtn" class="action-btn circle-btn admin-only-element" title="إدارة المستخدمين" data-i18n-title="user_management">
             <i class="bi bi-people-fill"></i>
           </button>
@@ -155,11 +185,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             <i class="bi bi-box-arrow-right"></i>
           </button>
         </div>
-        <button id="langToggleBtn" onclick="if(window.toggleLanguage) window.toggleLanguage(); return false;" class="action-btn circle-btn" title="تغيير اللغة"><i class="bi bi-translate"></i><span id="langToggleText" style="display:none" data-i18n="toggle_lang">English</span></button>
+        <button id="langToggleBtn" style="display: none !important;" onclick="if(window.toggleLanguage) window.toggleLanguage(); return false;" class="action-btn circle-btn" title="تغيير اللغة"><i class="bi bi-translate"></i><span id="langToggleText" style="display:none" data-i18n="toggle_lang">English</span></button>
         <button id="themeToggleBtn" class="action-btn circle-btn" title="تبديل المظهر">
           <i class="bi bi-sun-fill" id="themeIcon"></i>
         </button>
-        <button id="openImportModalBtn" class="action-btn btn-secondary admin-only-element">
+        <!-- Add Device Button -->
+        <button id="openAddModalBtn" class="action-btn btn-success">
+          <i class="bi bi-plus-circle-fill"></i>
+          <span data-i18n="add_device">إضافة جهاز جديد</span>
+        </button>
+        <button id="openImportModalBtn" class="action-btn btn-secondary admin-only-element" style="display: none !important;">
           <i class="bi bi-file-earmark-excel-fill"></i>
           <span data-i18n="import_excel">استيراد Excel</span>
         </button>
@@ -174,7 +209,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     <main class="app-content">
       
       <!-- Statistics Dashboard Row -->
-      <section class="stats-row">
+      <section id="statsRowSection" class="stats-row">
+                <div class="stat-card employees-card">
+          <div class="stat-icon">
+            <i class="bi bi-people-fill"></i>
+          </div>
+          <div class="stat-info">
+            <h3 data-i18n="total_employees">إجمالي الموظفين</h3>
+            <div class="stat-number" id="statEmployees">0</div>
+          </div>
+          <div class="stat-bg-icon"><i class="bi bi-people-fill"></i></div>
+        </div>
         <div class="stat-card total-card">
           <div class="stat-icon">
             <i class="bi bi-pc-display"></i>
@@ -221,7 +266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </section>
 
       <!-- Analytics Charts Section -->
-      <section class="analytics-section">
+      <section id="analyticsSection" class="analytics-section">
         <div class="chart-container">
           <div class="chart-header">
             <h3><i class="bi bi-pie-chart-fill"></i><span data-i18n="chart_dist"> توزيع الأجهزة حسب الإدارة</span></h3>
@@ -241,7 +286,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       </section>
 
       <!-- Advanced Custody Comparisons -->
-      <section class="advanced-comparisons-section">
+      <section id="comparisonContainerSection" class="advanced-comparisons-section">
         <div class="comparison-container">
           <div class="comparison-header">
             <h3><i class="bi bi-sliders"></i><span data-i18n="chart_compare"> مقارنات توزيع العهد والملحقات</span></h3>
@@ -249,7 +294,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
 
           <div class="comparison-filters">
-            <div style="display: grid; grid-template-columns: 1fr 2fr auto; gap: 1.5rem; align-items: start;">
+          <div class="comparison-filters-grid">
               
               <!-- Org Filter -->
               <div class="form-group" style="margin-bottom: 0;">
@@ -271,6 +316,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     <input type="checkbox" class="comp-metric-cb" value="has_monitor" checked>
                     <i class="bi bi-display" style="color: var(--clr-success, #10b981);"></i>
                     <span>من لديه أكثر من شاشة</span>
+                  </label>
+                  <label class="comp-metric-label">
+                    <input type="checkbox" class="comp-metric-cb" value="no_device" checked>
+                    <i class="bi bi-x-circle" style="color: var(--clr-danger, #f43f5e);"></i>
+                    <span>من ليس لديه أي جهاز</span>
                   </label>
                 </div>
               </div>
@@ -295,16 +345,20 @@ document.addEventListener('DOMContentLoaded', async () => {
       <section class="inventory-section">
         <div class="inventory-header">
           <div class="header-title-search">
-            <h2><i class="bi bi-grid-3x3-gap-fill"></i> قائمة الأجهزة والعهدة</h2>
+            <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+              <h2><i class="bi bi-grid-3x3-gap-fill"></i> قائمة الأجهزة والعهدة</h2>
+              <span id="devicesFilterCount" class="badge" style="font-size: 0.8rem; font-weight: 700; padding: 4px 10px; border-radius: 20px; background: rgba(99,102,241,0.12); color: var(--clr-primary-lt, #818cf8); border: 1px solid rgba(99,102,241,0.25);">0 جهاز</span>
+            </div>
             
             <!-- Live Search -->
-            <div class="search-box">
+            <div class="search-box" style="position: relative; display: flex; align-items: center;">
               <i class="bi bi-search"></i>
-              <input type="text" id="searchInput" placeholder="ابحث باسم الموظف، السيريال (Service Tag)، أو الموديل...">
+              <input type="text" id="searchInput" placeholder="ابحث باسم الموظف، السيريال (Service Tag)، الموديل، الإدارة..." style="padding-left: 32px;">
+              <button type="button" id="clearSearchBtn" style="display: none; position: absolute; left: 8px; background: none; border: none; color: var(--tx-muted, #94a3b8); cursor: pointer; font-size: 1.15rem; line-height: 1; padding: 2px;" title="مسح البحث">&times;</button>
             </div>
           </div>
 
-          <div class="header-filters">
+          <div class="header-filters" style="display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0.75rem;">
             <!-- Filter by Dept -->
             <div class="filter-group">
               <label for="filterDept"><span data-i18n="filter_dept">الإدارة:</span></label>
@@ -331,19 +385,18 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <option value="all">الكل</option>
                 <option value="clean"><span data-i18n="status_clean">سليم (بدون مشاكل)</span></option>
                 <option value="issues"><span data-i18n="status_issues">به مشاكل تقنية</span></option>
+                <option value="need_maint">بحاجة لصيانة</option>
+                <option value="in_maint">تحت الصيانة</option>
               </select>
             </div>
 
-            <!-- Add Device Button -->
-            <button id="openAddModalBtn" class="action-btn btn-success" style="display: none;">
-              <i class="bi bi-plus-circle-fill"></i>
-              <span data-i18n="add_device">إضافة جهاز جديد</span>
-            </button>
-            <!-- Add Column Button -->
-            <button id="openAddColumnModalBtn" class="action-btn btn-primary admin-only-element">
-              <i class="bi bi-layout-three-columns"></i>
-              <span data-i18n="add_column">إضافة عمود جديد</span>
-            </button>
+            <!-- Reset Filters Button -->
+            <div class="filter-group">
+              <button type="button" id="resetFiltersBtn" class="action-btn btn-secondary" onclick="resetSearchAndFilters()" title="إعادة ضبط كافة الفلاتر والبحث" style="height: 42px; padding: 0 14px; gap: 6px; font-size: 0.82rem; font-weight: 700; white-space: nowrap;">
+                <i class="bi bi-arrow-counterclockwise"></i>
+                <span>إعادة ضبط</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -354,8 +407,9 @@ document.addEventListener('DOMContentLoaded', async () => {
               <tr>
                 <th>الرقم الوظيفي</th>
                 <th>اسم الموظف</th>
-                <th>المسمى الوظيفي</th>
+                <th>القسم / الإدارة</th>
                 <th>الحالة التقنية</th>
+                <th>مُدخل البيانات</th>
                 <th class="admin-only-element">الإجراءات</th>
               </tr>
             </thead>
@@ -375,9 +429,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     <!-- Footer -->
     <footer class="app-footer">
-      <p>© 2026 شركة التقنية المحدودة. جميع الحقوق محفوظة.</p>
-      <p class="cyber-badge"><i class="bi bi-shield-lock-fill"></i> متوافق مع متطلبات الأمن السيبراني</p>
-    </footer>
+      <p>© 2026 &nbsp;|&nbsp; تم تصميم الموقع بواسطة <strong>N.N</strong></p>
+      </footer>
   </div>
 
   <!-- MODALS -->
@@ -402,9 +455,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div id="customFields_employee" class="full-width" style="display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 0.5rem;"></div>
           <div class="form-group" style="position: relative; grid-column: 1 / -1; display: grid; grid-template-columns: 2fr 1fr; gap: 1rem;">
             <div>
-              <label for="employeeName"><span data-i18n="emp_name">اسم الموظف </span><span class="required">*</span></label>
+              <label for="employeeName"><span data-i18n="emp_name">اسم الموظف / الإدارة </span><span class="required">*</span></label>
               <div style="display: flex; gap: 5px;">
-                <input type="text" id="employeeName" list="employeeNamesList" required placeholder="مثال: يوسف أحمد حكيم" style="flex: 1;">
+                <input type="text" id="employeeName" list="employeeNamesList" required placeholder="مثال: يوسف أحمد أو إدارة الشؤون الإدارية" style="flex: 1;">
                 <datalist id="employeeNamesList"></datalist>
                 <button type="button" class="action-btn btn-info" id="sharedPrinterBtn" style="display: none;" title="تعيين كطابعة للإدارة" onclick="document.getElementById('employeeName').value='طابعة مشتركة / عهدة الإدارة'"><i class="bi bi-diagram-3"></i></button>
               </div>
@@ -413,6 +466,10 @@ document.addEventListener('DOMContentLoaded', async () => {
               <label for="employeeId"><span>الرقم الوظيفي</span></label>
               <input type="text" id="employeeId" placeholder="مثال: 12345">
             </div>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px; margin-bottom: 5px;">
+            <label for="sharedUsers"><span>الموظفين المستخدمين للجهاز (للأجهزة المشتركة/الإدارات)</span></label>
+            <input type="text" id="sharedUsers" placeholder="أدخل أسماء الموظفين مفصولين بفاصلة (اختياري)">
           </div>
           <div class="form-group" style="grid-column: 1 / -1;">
             <button type="button" class="btn btn-secondary" onclick="openOrgTreeModal()" style="width: 100%; margin-bottom: 15px; background: var(--surface-color); color: var(--primary-color); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 1rem; padding: 0.75rem;">
@@ -477,7 +534,7 @@ document.addEventListener('DOMContentLoaded', async () => {
           <!-- PC Only Fields Grouping -->
           <div class="form-group pc-only-fields">
             <label for="ram"><span data-i18n="ram_size">سعة الرام (RAM)</span></label>
-            <input type="text" id="ram" placeholder="مثال: 16 GB">
+            <input type="text" id="ram" placeholder="مثال: 16">
           </div>
           <div class="form-group pc-only-fields">
             <label for="storageType"><span data-i18n="disk_type">نوع الهاردسك</span></label>
@@ -489,11 +546,17 @@ document.addEventListener('DOMContentLoaded', async () => {
           </div>
           <div class="form-group pc-only-fields">
             <label for="storageSize"><span data-i18n="disk_size">حجم الهاردسك</span></label>
-            <input type="text" id="storageSize" placeholder="مثال: 512 GB">
+            <input type="text" id="storageSize" placeholder="مثال: 512">
           </div>
           <div class="form-group pc-only-fields">
             <label for="monitorsCount"><span data-i18n="monitors">عدد الشاشات المرفقة</span></label>
             <input type="number" id="monitorsCount" min="1" max="10" value="1">
+            <div id="monitorsDetailsContainer" style="margin-top: 15px; display: flex; flex-direction: column; gap: 15px; padding-right: 10px; border-right: 2px solid var(--border);"></div>
+          </div>
+          <div class="form-group pc-only-fields">
+            <label for="dockingCount"><span>Docking Station</span></label>
+            <input type="number" id="dockingCount" min="0" max="5" value="0">
+            <div id="dockingDetailsContainer" style="margin-top: 15px; display: flex; flex-direction: column; gap: 15px; padding-right: 10px; border-right: 2px solid var(--border);"></div>
           </div>
           <div class="form-group pc-only-fields">
             <label for="phone"><span data-i18n="ip_phone">الهاتف / Cisco IP Phone</span></label>
@@ -542,18 +605,6 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button type="submit" class="action-btn btn-primary" id="saveDeviceBtn"><span data-i18n="save_data">حفظ البيانات</span></button>
         </div>
       
-          <div id="userPermissionsDiv" style="grid-column: 1 / -1; display: flex; gap: 1rem; align-items: center; margin-top: 10px; background: var(--bg-color); padding: 0.75rem; border-radius: var(--border-radius-sm);">
-            <strong style="color: var(--color-primary); font-size: 0.9rem;">صلاحيات المستخدم العادي:</strong>
-            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="permAdd" value="canAdd"> إضافة أجهزة
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="permEdit" value="canEdit"> تعديل أجهزة
-            </label>
-            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
-              <input type="checkbox" id="permDelete" value="canDelete"> حذف أجهزة
-            </label>
-          </div>
 
           </form>
     </div>
@@ -689,7 +740,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         <!-- Add New User Sub-form -->
         <div class="sub-card" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 1.25rem; border-radius: var(--border-radius-md);">
           <h4 style="margin-top: 0; margin-bottom: 1rem; color: var(--color-primary);"><i class="bi bi-person-plus-fill"></i><span data-i18n="add_user"> إضافة مستخدم جديد</span></h4>
-          <form id="addUserForm" style="display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 1rem; align-items: flex-end;">
+          <form id="addUserForm" class="add-user-form-grid">
             <div class="form-group" style="margin-bottom: 0;">
               <label for="newUsername"><span data-i18n="username">اسم المستخدم </span><span class="required">*</span></label>
               <input type="text" id="newUsername" required placeholder="اسم المستخدم" style="width: 100%;">
@@ -701,9 +752,35 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="form-group" style="margin-bottom: 0;">
               <label for="newUserRole">الصلاحية <span class="required">*</span></label>
               <select id="newUserRole" style="width: 100%;">
-                <option value="User"><span data-i18n="role_user">مستخدم عادي (User)</span></option>
+                <option value="DataEntry"><span data-i18n="role_data_entry">مدخل بيانات (Data Entry)</span></option>
+                <option value="Supervisor"><span data-i18n="role_supervisor">مشرف (Supervisor)</span></option>
                 <option value="Admin"><span data-i18n="role_admin">مدير النظام (Admin)</span></option>
               </select>
+            </div>
+            <div id="userPermissionsDiv" class="permissions-flex" style="grid-column: 1 / -1;">
+              <strong style="color: var(--color-primary); font-size: 0.9rem;">صلاحيات مدخل البيانات:</strong>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permAdd" value="canAdd"> إضافة
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permEdit" value="canEdit"> تعديل
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permDelete" value="canDelete"> حذف
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permComparisons" value="canViewComparisons"> مقارنات
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permStats" value="canViewStats"> إحصائيات
+              </label>
+              <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+                <input type="checkbox" id="permLogs" value="canViewLogs"> سجل النظام
+              </label>
+            </div>
+            <div class="form-group" style="margin-bottom: 0; display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+              <input type="checkbox" id="newUserMustChangePassword" checked style="width: auto; margin: 0;">
+              <label for="newUserMustChangePassword" style="margin: 0; cursor: pointer; font-size: 0.85rem;">فرض تغيير كلمة المرور عند الدخول الأول</label>
             </div>
             <button type="submit" class="action-btn btn-success" style="height: 42px; padding: 0 1.5rem;"><span data-i18n="add">إضافة</span></button>
           </form>
@@ -732,6 +809,71 @@ document.addEventListener('DOMContentLoaded', async () => {
       <div class="modal-footer">
         <button type="button" class="action-btn btn-secondary" onclick="closeModal('userManagementModal')"><span data-i18n="close">إغلاق</span></button>
       </div>
+    </div>
+  </div>
+
+  <!-- Edit User Modal -->
+  <div id="editUserModal" class="modal">
+    <div class="modal-content small-modal-content">
+      <div class="modal-header">
+        <h3 style="margin: 0; color: var(--color-primary);"><i class="bi bi-pencil-square"></i> تعديل بيانات المستخدم</h3>
+        <span class="close-btn" onclick="closeModal('editUserModal')">&times;</span>
+      </div>
+      <form id="editUserForm">
+        <div class="modal-body" style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
+          <input type="hidden" id="editUserId">
+          
+          <div class="form-group">
+            <label>اسم المستخدم</label>
+            <input type="text" id="editUsername" readonly disabled style="width: 100%; opacity: 0.7;">
+          </div>
+          
+          <div class="form-group">
+            <label for="editUserPassword">كلمة المرور الجديدة (اختياري)</label>
+            <input type="password" id="editUserPassword" placeholder="اتركه فارغاً لعدم التغيير" style="width: 100%;">
+          </div>
+          
+          <div class="form-group">
+            <label for="editUserRole">الدور</label>
+            <select id="editUserRole" style="width: 100%;">
+              <option value="DataEntry">مدخل بيانات (Data Entry)</option>
+              <option value="Supervisor">مشرف (Supervisor)</option>
+              <option value="Admin">مدير النظام (Admin)</option>
+            </select>
+          </div>
+
+          <div id="editUserPermissionsDiv" class="permissions-flex">
+            <strong style="color: var(--color-primary); font-size: 0.9rem;">صلاحيات المستخدم:</strong>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermAdd" value="canAdd"> إضافة
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermEdit" value="canEdit"> تعديل
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermDelete" value="canDelete"> حذف
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermComparisons" value="canViewComparisons"> مقارنات
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermStats" value="canViewStats"> إحصائيات
+            </label>
+            <label style="display: flex; align-items: center; gap: 0.3rem; font-size: 0.85rem; cursor: pointer;">
+              <input type="checkbox" id="editPermLogs" value="canViewLogs"> سجل النظام
+            </label>
+          </div>
+
+          <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem; justify-content: center;">
+            <input type="checkbox" id="editUserMustChangePassword" style="width: auto; margin: 0;">
+            <label for="editUserMustChangePassword" style="margin: 0; cursor: pointer; font-size: 0.85rem;">فرض تغيير كلمة المرور عند الدخول القادم</label>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="action-btn btn-secondary" onclick="closeModal('editUserModal')"><span data-i18n="cancel">إلغاء</span></button>
+          <button type="submit" class="action-btn btn-primary"><span data-i18n="save">حفظ التعديلات</span></button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -849,5 +991,80 @@ document.addEventListener('DOMContentLoaded', async () => {
   </div>
 
   <!-- App Main Javascript -->
+  <!-- System Logs Modal -->
+  <div id="systemLogsModal" class="modal">
+    <div class="modal-content" style="max-width: 850px;">
+      <div class="modal-header">
+        <h2><i class="bi bi-card-list"></i> سجل نشاطات النظام</h2>
+        <span class="close-btn" onclick="closeModal('systemLogsModal')">&times;</span>
+      </div>
+      <div class="modal-body" style="background: var(--bg-color);">
+        <div class="table-container" style="background: var(--card-bg); padding: 15px; border-radius: 8px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>التاريخ والوقت</th>
+                <th>الإجراء</th>
+                <th>النوع</th>
+                <th>الهدف</th>
+                <th>بواسطة</th>
+              </tr>
+            </thead>
+            <tbody id="systemLogsTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('systemLogsModal')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recycle Bin Modal -->
+  <div id="recycleBinModal" class="modal">
+    <div class="modal-content" style="max-width: 900px;">
+      <div class="modal-header">
+        <h2><i class="bi bi-trash-fill"></i> سلة المهملات</h2>
+        <span class="close-btn" onclick="closeModal('recycleBinModal')">&times;</span>
+      </div>
+      <div class="modal-body" style="background: var(--bg-color);">
+        <div class="table-container" style="background: var(--card-bg); padding: 15px; border-radius: 8px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>تاريخ الحذف</th>
+                <th>حُذف بواسطة</th>
+                <th>الموظف</th>
+                <th>الإدارة</th>
+                <th style="text-align: left;">إجراءات</th>
+              </tr>
+            </thead>
+            <tbody id="recycleBinTableBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('recycleBinModal')">إغلاق</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notifications Dropdown (Moved here to escape header's overflow:hidden) -->
+  <div id="notificationsDropdown" class="notifications-dropdown">
+    <div class="notif-header">
+      <h4>آخر النشاطات</h4>
+      <div style="display:flex; align-items:center; gap:0.5rem;">
+        <button id="viewAllLogsBtn" class="btn-text" style="font-size: 0.8rem; background: none; border: none; color: var(--primary-color); cursor: pointer;">سجل النظام بالكامل</button>
+        <button id="closeNotifDropdownBtn" style="background:none;border:none;cursor:pointer;color:var(--tx-muted);font-size:1.2rem;padding:0 4px;line-height:1;" title="إغلاق">&times;</button>
+      </div>
+    </div>
+    <div id="notificationsList" class="notif-list">
+      <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">جاري التحميل...</div>
+    </div>
+  </div>
 </body>
 </html>
+
+
+
+

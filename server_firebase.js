@@ -54,6 +54,43 @@ async function initDb() {
   }
 }
 
+// In-Memory and Offline Fallback Cache to protect against quota exhaustion
+let devicesCache = null;
+let lastDevicesFetch = 0;
+const CACHE_TTL_MS = 60 * 1000; // 1 minute in-memory cache
+
+function loadLocalDevicesCache() {
+  try {
+    const cacheFile = path.join(__dirname, 'data', 'devices_cache.json');
+    if (fs.existsSync(cacheFile)) {
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    }
+  } catch (e) {
+    console.error('Failed to load local devices cache:', e.message);
+  }
+  return [];
+}
+
+function loadLocalColumnsCache() {
+  try {
+    const cacheFile = path.join(__dirname, 'data', 'columns_cache.json');
+    if (fs.existsSync(cacheFile)) {
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
+function loadLocalUsersCache() {
+  try {
+    const cacheFile = path.join(__dirname, 'data', 'users_cache.json');
+    if (fs.existsSync(cacheFile)) {
+      return JSON.parse(fs.readFileSync(cacheFile, 'utf8'));
+    }
+  } catch (e) {}
+  return [];
+}
+
 // Authentication Middlewares
 function authenticateToken(req, res, next) {
   const token = req.cookies.token;
@@ -113,6 +150,10 @@ function requirePermission(perm) {
 const sseClients = new Set();
 
 function broadcastUpdate(eventType, data = {}) {
+  if (eventType === 'devices_updated') {
+    devicesCache = null;
+    lastDevicesFetch = 0;
+  }
   const payload = `data: ${JSON.stringify({ type: eventType, ...data })}\n\n`;
   sseClients.forEach(client => {
     try {
@@ -179,12 +220,28 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const usersRef = db.collection('users');
-    const snapshot = await usersRef.where('username', '==', username.trim()).get();
-    if (snapshot.empty) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
-
     let user;
     let userId;
-    snapshot.forEach(doc => { user = doc.data(); userId = doc.id; });
+
+    try {
+      const snapshot = await usersRef.where('username', '==', username.trim()).get();
+      if (!snapshot.empty) {
+        snapshot.forEach(doc => { user = doc.data(); userId = doc.id; });
+      }
+    } catch (dbErr) {
+      console.warn('Firestore login lookup failed, checking local users cache:', dbErr.message);
+    }
+
+    if (!user) {
+      const localUsers = loadLocalUsersCache();
+      const found = localUsers.find(u => u.username === username.trim());
+      if (found) {
+        user = found;
+        userId = found.id;
+      }
+    }
+
+    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
 
     const hashed = hashPassword(password);
     if (user.password !== hashed) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
@@ -291,8 +348,8 @@ app.get('/api/logs', authenticateToken, async (req, res) => {
     });
     res.json(logs);
   } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: 'حدث خطأ أثناء جلب السجلات' });
+    console.warn('Firestore logs failed, returning empty list:', error.message);
+    res.json([]);
   }
 });
 
@@ -312,7 +369,9 @@ app.get('/api/admin/users', requireAdmin, async (req, res) => {
     });
     res.json(users);
   } catch (error) {
-    res.status(500).json({ error: 'فشل في جلب المستخدمين' });
+    console.warn('Firestore get users failed, serving local fallback:', error.message);
+    const local = loadLocalUsersCache();
+    res.json(local.map(u => ({ id: u.id, username: u.username, role: u.role, permissions: u.permissions, mustChangePassword: false })));
   }
 });
 
@@ -393,25 +452,53 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
 // ==========================================
 
 app.get('/api/devices', authenticateToken, async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=60, stale-while-revalidate=120');
+
+  const now = Date.now();
+  if (devicesCache && (now - lastDevicesFetch < CACHE_TTL_MS)) {
+    return filterAndSendDevices(devicesCache, req, res);
+  }
+
   try {
     const snapshot = await db.collection('devices').get();
     const devices = [];
     snapshot.forEach(doc => {
       const data = doc.data();
-      // Skip deleted devices
       if (data.isDeleted) return;
-      
-      // Role-Based Filtering
-      if ((req.user.role === 'DataEntry' || req.user.role === 'User') && data.created_by !== req.user.username) {
-        return; // Skip devices not created by this user
+
+      let cf = [];
+      if (data.customFields) {
+        if (typeof data.customFields === 'string') {
+          try { cf = JSON.parse(data.customFields); } catch(e) { cf = []; }
+        } else if (Array.isArray(data.customFields)) {
+          cf = data.customFields;
+        }
       }
-      devices.push({ id: doc.id, ...data, customFields: data.customFields ? JSON.parse(data.customFields) : [] });
+      devices.push({ id: doc.id, ...data, customFields: cf });
     });
-    res.json(devices);
+
+    devicesCache = devices;
+    lastDevicesFetch = now;
+    filterAndSendDevices(devices, req, res);
   } catch (error) {
+    console.warn('Firestore get devices failed (likely quota exceeded), serving from cache:', error.message);
+    if (!devicesCache || devicesCache.length === 0) {
+      devicesCache = loadLocalDevicesCache();
+    }
+    if (devicesCache && devicesCache.length > 0) {
+      return filterAndSendDevices(devicesCache, req, res);
+    }
     res.status(500).json({ error: 'حدث خطأ أثناء جلب الأجهزة' });
   }
 });
+
+function filterAndSendDevices(devices, req, res) {
+  let filtered = devices;
+  if ((req.user.role === 'DataEntry' || req.user.role === 'User') && req.user.username) {
+    filtered = devices.filter(d => d.created_by === req.user.username);
+  }
+  res.json(filtered);
+}
 
 app.get('/api/columns', authenticateToken, async (req, res) => {
   try {
@@ -423,7 +510,8 @@ app.get('/api/columns', authenticateToken, async (req, res) => {
     });
     res.json(columns);
   } catch (error) {
-    res.status(500).json({ error: 'حدث خطأ أثناء جلب الأعمدة' });
+    console.warn('Firestore get columns failed, serving fallback:', error.message);
+    res.json(loadLocalColumnsCache());
   }
 });
 
@@ -436,7 +524,8 @@ app.get('/api/devices/:id/history', authenticateToken, async (req, res) => {
     history.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
     res.json(history);
   } catch (error) {
-    res.status(500).json({ error: 'حدث خطأ أثناء جلب سجل الجهاز' });
+    console.warn('Firestore device history failed, returning empty list:', error.message);
+    res.json([]);
   }
 });
 
@@ -733,7 +822,8 @@ app.get('/api/devices/recycle-bin', authenticateToken, async (req, res) => {
     });
     res.json(devices);
   } catch (error) {
-    res.status(500).json({ error: 'حدث خطأ أثناء جلب سلة المهملات' });
+    console.warn('Firestore recycle-bin failed, returning empty list:', error.message);
+    res.json([]);
   }
 });
 

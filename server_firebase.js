@@ -667,7 +667,7 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
 
 
     const newDeviceData = {
-      assetType: assetType || 'Computer',
+      assetType: (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer'),
       employeeName: employeeName || 'غير معروف',
       orgPath: orgPath || 'مجلس الإدارة',
       deviceModel: deviceModel || 'لا يوجد',
@@ -764,7 +764,8 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
       customFields: customFields !== undefined ? JSON.stringify(customFields) : device.customFields,
       connectionType: connectionType !== undefined ? connectionType : device.connectionType,
       osVersion: osVersion !== undefined ? osVersion : device.osVersion,
-      ipAddress: ipAddress !== undefined ? ipAddress : device.ipAddress
+      ipAddress: ipAddress !== undefined ? ipAddress : device.ipAddress,
+      assetType: (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (req.body.assetType || 'Computer')
     };
 
     await docRef.update(updatedData);

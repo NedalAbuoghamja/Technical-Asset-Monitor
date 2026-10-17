@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>المنظومة تحت الصيانة والتحديث</title>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;900&display=swap" rel="stylesheet">
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Cairo', sans-serif;
+    }
+    body {
+      background: linear-gradient(135deg, #090e17 0%, #0f172a 100%);
+      color: #f8fafc;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+      text-align: center;
+    }
+    .card {
+      background: rgba(30, 41, 59, 0.7);
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 20px;
+      padding: 40px 30px;
+      max-width: 550px;
+      width: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+    }
+    .icon {
+      font-size: 4rem;
+      margin-bottom: 20px;
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.08); }
+    }
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 700;
+      color: #38bdf8;
+      margin-bottom: 15px;
+    }
+    p {
+      color: #94a3b8;
+      font-size: 1.05rem;
+      line-height: 1.8;
+      margin-bottom: 25px;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(234, 179, 8, 0.15);
+      color: #facc15;
+      padding: 8px 18px;
+      border-radius: 50px;
+      font-size: 0.95rem;
+      font-weight: 600;
+      border: 1px solid rgba(234, 179, 8, 0.3);
+    }
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      background-color: #facc15;
+      border-radius: 50%;
+    }
+    .footer {
+      margin-top: 30px;
+      font-size: 0.85rem;
+      color: #64748b;
+      border-top: 1px solid rgba(255, 255, 255, 0.05);
+      padding-top: 15px;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="icon">🚧</div>
+    <div class="status-badge">
+      <span class="status-dot"></span>
+      <span>المنظومة السحابية متوقفة مؤقتاً</span>
+    </div>
+    <h1 style="margin-top: 20px;">أعمال تحديث وإدخال الأجهزة</h1>
+    <p>
+      المنظومة السحابية متوقفة حالياً عن استقبال الطلبات لإجراء أعمال جرد وتحديث وتعديل بيانات الأجهزة والموظفين.
+      <br>
+      سيتم إعادة إطلاق المنظومة فور اكتمال التحديثات.
+    </p>
+    <div class="footer">
+      منظومة متابعة الأصول والأجهزة التقنية | الإدارة الفنية
+    </div>
+  </div>
+</body>
+</html>

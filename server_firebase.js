@@ -26,6 +26,27 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_2026';
 // Middleware
 app.use(express.json());
 app.use(cookieParser());
+
+// CLOUD SUSPENSION / MAINTENANCE MODE
+// The cloud version is temporarily suspended until local inventory data entry is finalized
+const CLOUD_SUSPENDED = true;
+
+app.use((req, res, next) => {
+  if (CLOUD_SUSPENDED) {
+    if (req.path.startsWith('/api/')) {
+      return res.status(503).json({
+        maintenance: true,
+        message: 'المنظومة السحابية متوقفة مؤقتاً لأعمال تحديث وإدخال الأجهزة. العمل جارٍ محلياً وسيتم إطلاقها قريباً.'
+      });
+    }
+    const maintenanceFile = path.join(__dirname, 'public', 'maintenance.html');
+    if (fs.existsSync(maintenanceFile)) {
+      return res.sendFile(maintenanceFile);
+    }
+  }
+  next();
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Multer storage for uploaded files

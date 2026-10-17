@@ -622,14 +622,16 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
   try {
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers
     } = req.body;
+
+    const computedAssetType = (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer');
 
     const result = await dbRun(`
       INSERT INTO devices (
         employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, department, circle, section, unit
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '')
+        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers, department, circle, section, unit
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '')
     `, [
       employeeName || 'غير معروف',
       orgPath || 'مجلس الإدارة',
@@ -644,17 +646,20 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
       notes || 'لا يوجد',
       systemsUsed || 'لا يوجد',
       phone || 'لا يوجد',
+      employeeId || '',
       technicalStatus || 'سليم',
       JSON.stringify(customFields || []),
       connectionType || 'USB',
       osVersion || '',
-      ipAddress || ''
+      ipAddress || '',
+      computedAssetType,
+      sharedUsers || ''
     ]);
 
     const newDevice = {
       id: result.lastID,
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType: computedAssetType, sharedUsers
     };
 
     res.status(201).json(newDevice);
@@ -714,16 +719,17 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
     const updatedCustomFields = customFields !== undefined ? JSON.stringify(customFields) : device.customFields;
     const updatedConnectionType = connectionType !== undefined ? connectionType : device.connectionType;
     const updatedOsVersion = osVersion !== undefined ? osVersion : device.osVersion;
-    const updatedIpAddress = ipAddress !== undefined ? ipAddress : device.ipAddress;
+    const updatedSharedUsers = req.body.sharedUsers !== undefined ? req.body.sharedUsers : (device.sharedUsers || '');
+    const updatedAssetType = (updatedDeviceNature === 'None' || updatedDeviceModel === 'لا يوجد') ? 'None' : (req.body.assetType || 'Computer');
 
     await dbRun(`
       UPDATE devices SET
         employeeName = ?, orgPath = ?, deviceModel = ?, ram = ?, storageType = ?, storageSize = ?,
-        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, employeeId = ?, technicalStatus = ?, customFields = ?, connectionType = ?, osVersion = ?, ipAddress = ?
+        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, employeeId = ?, technicalStatus = ?, customFields = ?, connectionType = ?, osVersion = ?, ipAddress = ?, assetType = ?, sharedUsers = ?
       WHERE id = ?
     `, [
       updatedEmployeeName, updatedOrgPath, updatedDeviceModel, updatedRam, updatedStorageType, updatedStorageSize,
-      updatedMonitorsCount, updatedDeviceNature, updatedServiceTag, updatedRecurringIssues, updatedNotes, updatedSystemsUsed, updatedPhone, updatedEmployeeId, updatedTechnicalStatus, updatedCustomFields, updatedConnectionType, updatedOsVersion, updatedIpAddress,
+      updatedMonitorsCount, updatedDeviceNature, updatedServiceTag, updatedRecurringIssues, updatedNotes, updatedSystemsUsed, updatedPhone, updatedEmployeeId, updatedTechnicalStatus, updatedCustomFields, updatedConnectionType, updatedOsVersion, updatedIpAddress, updatedAssetType, updatedSharedUsers,
       id
     ]);
 
@@ -742,11 +748,14 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
       notes: updatedNotes,
       systemsUsed: updatedSystemsUsed,
       phone: updatedPhone,
+      employeeId: updatedEmployeeId,
       technicalStatus: updatedTechnicalStatus,
       customFields: updatedCustomFields ? JSON.parse(updatedCustomFields) : [],
       connectionType: updatedConnectionType,
       osVersion: updatedOsVersion,
-      ipAddress: updatedIpAddress
+      ipAddress: updatedIpAddress,
+      assetType: updatedAssetType,
+      sharedUsers: updatedSharedUsers
     };
 
     res.json(updatedDevice);

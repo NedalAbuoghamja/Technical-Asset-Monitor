@@ -20,6 +20,8 @@ const translations = {
     "export_excel": "تصدير Excel",
     "toggle_lang": "English",
     
+    "total_employees": "إجمالي الموظفين",
+    "comp_employee": "موظف",
     "total_devices": "إجمالي الأجهزة",
     "clean_devices": "الأجهزة السليمة",
     "faulty_devices": "بها أعطال",
@@ -113,6 +115,7 @@ const translations = {
     "th_model": "الموديل",
     "th_service_tag": "رقم السيرفيس",
     "th_status": "الحالة التقنية",
+    "th_has_device": "امتلاك جهاز",
     "th_actions": "الإجراءات",
 
     "modal_add_device": "إضافة جهاز جديد",
@@ -216,6 +219,8 @@ const translations = {
     "export_excel": "Export Excel",
     "toggle_lang": "العربية",
     
+    "total_employees": "Total Employees",
+    "comp_employee": "employees",
     "total_devices": "Total Devices",
     "clean_devices": "Healthy Devices",
     "faulty_devices": "Devices with Issues",
@@ -309,6 +314,7 @@ const translations = {
     "th_model": "Model",
     "th_service_tag": "Service Tag",
     "th_status": "Status",
+    "th_has_device": "Device Possession",
     "th_actions": "Actions",
 
     "modal_add_device": "Add New Asset",

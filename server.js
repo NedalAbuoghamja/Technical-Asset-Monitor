@@ -128,6 +128,28 @@ async function initDb() {
     // Column likely exists
   }
 
+  // Try to add Intune enrichment columns if they don't exist
+  try {
+    await dbRun(`ALTER TABLE devices ADD COLUMN deviceName TEXT`);
+  } catch (err) {}
+  try {
+    await dbRun(`ALTER TABLE devices ADD COLUMN englishName TEXT`);
+  } catch (err) {}
+  try {
+    await dbRun(`ALTER TABLE devices ADD COLUMN email TEXT`);
+  } catch (err) {}
+
+  await dbRun(`
+    CREATE TABLE IF NOT EXISTS intune_devices (
+      serviceTag TEXT PRIMARY KEY,
+      deviceName TEXT,
+      model TEXT,
+      englishName TEXT,
+      email TEXT,
+      osVersion TEXT
+    )
+  `);
+
   await dbRun(`
     CREATE TABLE IF NOT EXISTS device_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -428,9 +450,45 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// Helper to lookup Intune device info
+async function lookupIntuneDevice(serviceTag) {
+  if (!serviceTag || serviceTag === 'لا يوجد' || serviceTag === 'None') return null;
+  const cTag = String(serviceTag).trim().toUpperCase().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '');
+  if (!cTag) return null;
+
+  try {
+    let row = await dbGet(`SELECT * FROM intune_devices WHERE UPPER(serviceTag) = ?`, [cTag]);
+    if (row) return row;
+
+    const allIntune = await dbAll(`SELECT * FROM intune_devices`);
+    return allIntune.find(d => {
+      const k = (d.serviceTag || '').toUpperCase();
+      return k === cTag ||
+             k.replace(/0/g, 'O') === cTag.replace(/0/g, 'O') ||
+             k.replace(/5/g, 'S') === cTag.replace(/5/g, 'S');
+    }) || null;
+  } catch (err) {
+    return null;
+  }
+}
+
 // ==========================================
 // CUSTODY / DEVICES APIs
 // ==========================================
+
+// Lookup Intune device info by Service Tag
+app.get('/api/intune/lookup/:tag', authenticateToken, async (req, res) => {
+  try {
+    const data = await lookupIntuneDevice(req.params.tag);
+    if (data) {
+      res.json({ found: true, data });
+    } else {
+      res.json({ found: false });
+    }
+  } catch (error) {
+    res.json({ found: false });
+  }
+});
 
 // Get all devices
 app.get('/api/devices', authenticateToken, async (req, res) => {
@@ -622,26 +680,44 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
   try {
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers,
+      deviceName, englishName, email
     } = req.body;
 
-    const computedAssetType = (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer');
+    let finalDeviceName = deviceName || '';
+    let finalEnglishName = englishName || '';
+    let finalEmail = email || '';
+    let finalDeviceModel = deviceModel || 'لا يوجد';
+    let finalServiceTag = serviceTag ? String(serviceTag).trim().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '') : 'لا يوجد';
+
+    if (finalServiceTag && finalServiceTag !== 'لا يوجد' && (!finalDeviceName || !finalEnglishName || !finalEmail)) {
+      const intuneMatch = await lookupIntuneDevice(finalServiceTag);
+      if (intuneMatch) {
+        if (!finalDeviceName && intuneMatch.deviceName) finalDeviceName = intuneMatch.deviceName;
+        if (!finalEnglishName && intuneMatch.englishName) finalEnglishName = intuneMatch.englishName;
+        if (!finalEmail && intuneMatch.email) finalEmail = intuneMatch.email;
+        if ((!finalDeviceModel || finalDeviceModel === 'لا يوجد') && intuneMatch.model) finalDeviceModel = intuneMatch.model;
+        if (intuneMatch.serviceTag) finalServiceTag = intuneMatch.serviceTag;
+      }
+    }
+
+    const computedAssetType = (deviceNature === 'None' || finalDeviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer');
 
     const result = await dbRun(`
       INSERT INTO devices (
         employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers, department, circle, section, unit
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '')
+        monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType, sharedUsers, deviceName, englishName, email, department, circle, section, unit
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', '', '', '')
     `, [
       employeeName || 'غير معروف',
       orgPath || 'مجلس الإدارة',
-      deviceModel || 'لا يوجد',
+      finalDeviceModel,
       ram || 'لا يوجد',
       storageType || 'SSD',
       storageSize || 'لا يوجد',
       parseInt(monitorsCount) || 1,
       deviceNature || 'Desktop',
-      serviceTag || 'لا يوجد',
+      finalServiceTag,
       recurringIssues || 'لا توجد مشاكل حالياً',
       notes || 'لا يوجد',
       systemsUsed || 'لا يوجد',
@@ -653,13 +729,19 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
       osVersion || '',
       ipAddress || '',
       computedAssetType,
-      sharedUsers || ''
+      sharedUsers || '',
+      finalDeviceName,
+      finalEnglishName,
+      finalEmail
     ]);
 
     const newDevice = {
       id: result.lastID,
-      employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType: computedAssetType, sharedUsers
+      employeeName, orgPath, deviceModel: finalDeviceModel, ram, storageType, storageSize,
+      monitorsCount, deviceNature, serviceTag: finalServiceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType: computedAssetType, sharedUsers,
+      deviceName: finalDeviceName,
+      englishName: finalEnglishName,
+      email: finalEmail
     };
 
     res.status(201).json(newDevice);
@@ -681,7 +763,8 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
 
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress
+      monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, technicalStatus, customFields, connectionType, osVersion, ipAddress,
+      deviceName, englishName, email
     } = req.body;
 
     const updatedEmployeeName = employeeName !== undefined ? employeeName : device.employeeName;
@@ -703,13 +786,13 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
       ]);
     }
 
-    const updatedDeviceModel = deviceModel !== undefined ? deviceModel : device.deviceModel;
+    let updatedDeviceModel = deviceModel !== undefined ? deviceModel : device.deviceModel;
     const updatedRam = ram !== undefined ? ram : device.ram;
     const updatedStorageType = storageType !== undefined ? storageType : device.storageType;
     const updatedStorageSize = storageSize !== undefined ? storageSize : device.storageSize;
     const updatedMonitorsCount = monitorsCount !== undefined ? parseInt(monitorsCount) || 1 : device.monitorsCount;
     const updatedDeviceNature = deviceNature !== undefined ? deviceNature : device.deviceNature;
-    const updatedServiceTag = serviceTag !== undefined ? serviceTag : device.serviceTag;
+    let updatedServiceTag = serviceTag !== undefined ? String(serviceTag).trim().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '') : device.serviceTag;
     const updatedRecurringIssues = recurringIssues !== undefined ? recurringIssues : device.recurringIssues;
     const updatedNotes = notes !== undefined ? notes : device.notes;
     const updatedSystemsUsed = systemsUsed !== undefined ? systemsUsed : device.systemsUsed;
@@ -719,17 +802,35 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
     const updatedCustomFields = customFields !== undefined ? JSON.stringify(customFields) : device.customFields;
     const updatedConnectionType = connectionType !== undefined ? connectionType : device.connectionType;
     const updatedOsVersion = osVersion !== undefined ? osVersion : device.osVersion;
+    const updatedIpAddress = ipAddress !== undefined ? ipAddress : (device.ipAddress || '');
     const updatedSharedUsers = req.body.sharedUsers !== undefined ? req.body.sharedUsers : (device.sharedUsers || '');
     const updatedAssetType = (updatedDeviceNature === 'None' || updatedDeviceModel === 'لا يوجد') ? 'None' : (req.body.assetType || 'Computer');
+    let updatedDeviceName = deviceName !== undefined ? deviceName : (device.deviceName || '');
+    let updatedEnglishName = englishName !== undefined ? englishName : (device.englishName || '');
+    let updatedEmail = email !== undefined ? email : (device.email || '');
+
+    // Auto-enrich from Intune if missing
+    if (updatedServiceTag && updatedServiceTag !== 'لا يوجد' && (!updatedDeviceName || !updatedEnglishName || !updatedEmail)) {
+      const intuneMatch = await lookupIntuneDevice(updatedServiceTag);
+      if (intuneMatch) {
+        if (!updatedDeviceName && intuneMatch.deviceName) updatedDeviceName = intuneMatch.deviceName;
+        if (!updatedEnglishName && intuneMatch.englishName) updatedEnglishName = intuneMatch.englishName;
+        if (!updatedEmail && intuneMatch.email) updatedEmail = intuneMatch.email;
+        if ((!updatedDeviceModel || updatedDeviceModel === 'لا يوجد') && intuneMatch.model) updatedDeviceModel = intuneMatch.model;
+        if (intuneMatch.serviceTag) updatedServiceTag = intuneMatch.serviceTag;
+      }
+    }
 
     await dbRun(`
       UPDATE devices SET
         employeeName = ?, orgPath = ?, deviceModel = ?, ram = ?, storageType = ?, storageSize = ?,
-        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, employeeId = ?, technicalStatus = ?, customFields = ?, connectionType = ?, osVersion = ?, ipAddress = ?, assetType = ?, sharedUsers = ?
+        monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, employeeId = ?, technicalStatus = ?, customFields = ?, connectionType = ?, osVersion = ?, ipAddress = ?, assetType = ?, sharedUsers = ?,
+        deviceName = ?, englishName = ?, email = ?
       WHERE id = ?
     `, [
       updatedEmployeeName, updatedOrgPath, updatedDeviceModel, updatedRam, updatedStorageType, updatedStorageSize,
       updatedMonitorsCount, updatedDeviceNature, updatedServiceTag, updatedRecurringIssues, updatedNotes, updatedSystemsUsed, updatedPhone, updatedEmployeeId, updatedTechnicalStatus, updatedCustomFields, updatedConnectionType, updatedOsVersion, updatedIpAddress, updatedAssetType, updatedSharedUsers,
+      updatedDeviceName, updatedEnglishName, updatedEmail,
       id
     ]);
 
@@ -755,7 +856,10 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
       osVersion: updatedOsVersion,
       ipAddress: updatedIpAddress,
       assetType: updatedAssetType,
-      sharedUsers: updatedSharedUsers
+      sharedUsers: updatedSharedUsers,
+      deviceName: updatedDeviceName,
+      englishName: updatedEnglishName,
+      email: updatedEmail
     };
 
     res.json(updatedDevice);
@@ -808,12 +912,15 @@ app.get('/api/export', authenticateToken, async (req, res) => {
       const paths = d.orgPath ? d.orgPath.split('||') : [];
       const row = {
         "اسم الموظف": d.employeeName,
+        "اسم الموظف بالإنجليزي": d.englishName || '',
+        "البريد الإلكتروني": d.email || '',
         "الرقم الوظيفي": d.employeeId || '',
         "مجلس الإدارة / المكاتب": paths[0] || d.department || '',
         "الإدارة": paths[1] || d.section || '',
         "القسم": paths[2] || d.unit || '',
         "الوحدة": paths[3] || '',
         "نوع الجهاز": d.deviceModel,
+        "اسم الكمبيوتر": d.deviceName || '',
         "سعة الرام (RAM)": d.ram,
         "نوع الهاردسك": d.storageType,
         "حجم الهاردسك": d.storageSize,
@@ -905,7 +1012,10 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       "عدد الشاشات", "طبيعة الجهاز", "السيرفس تاق (Service Tag)", "السيرفس تاق",
       "السيريال ماي [Service Tag]", "السيرفر تاق", "الحالة التقنية", "المشاكل المتكررة", "المشاكل", "الملاحظات", "ملاحظات", "الأنظمة والمنظومات المستخدمة",
       "الأنظمة والمستلزمات المستخدمة", "الهاتف / الملحقات", "الهاتف", "هاتف", "تليفون", "الهاتف الداخلي",
-      "مجلس الإدارة / المكاتب", "الرقم الوظيفي", "رقم الموظف"
+      "مجلس الإدارة / المكاتب", "الرقم الوظيفي", "رقم الموظف",
+      "اسم الكمبيوتر", "اسم الجهاز", "Device Name", "Computer Name",
+      "اسم الموظف بالإنجليزي", "المستخدم في انتيون", "Primary User", "User Name",
+      "البريد الإلكتروني", "User Email", "Email", "الايميل"
     ];
 
     let addedCount = 0;
@@ -957,6 +1067,9 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       const notes = getValue(["الملاحظات", "ملاحظات"], 13);
       const systemsUsed = getValue(["الأنظمة والمنظومات المستخدمة", "الأنظمة والمستلزمات المستخدمة"], 14);
       const phone = getValue(["الهاتف / الملحقات", "هاتف", "تليفون", "الهاتف الداخلي"], 15);
+      const deviceName = getValue(["اسم الكمبيوتر", "اسم الجهاز", "Device Name", "Computer Name"]);
+      const englishName = getValue(["اسم الموظف بالإنجليزي", "المستخدم في انتيون", "Primary User", "User Name"]);
+      const email = getValue(["البريد الإلكتروني", "User Email", "Email", "الايميل"]);
       
       let paths = [];
       if (topLevel && topLevel !== 'لا يوجد') paths.push(topLevel);
@@ -982,14 +1095,20 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
       );
 
       if (match) {
+        const finalDeviceName = (deviceName && deviceName !== 'لا يوجد') ? deviceName : (match.deviceName || '');
+        const finalEnglishName = (englishName && englishName !== 'لا يوجد') ? englishName : (match.englishName || '');
+        const finalEmail = (email && email !== 'لا يوجد') ? email : (match.email || '');
+
         await dbRun(`
           UPDATE devices SET
             employeeName = ?, department = ?, section = ?, unit = ?, deviceModel = ?, ram = ?, storageType = ?, storageSize = ?,
-            monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, technicalStatus = ?, customFields = ?
+            monitorsCount = ?, deviceNature = ?, serviceTag = ?, recurringIssues = ?, notes = ?, systemsUsed = ?, phone = ?, technicalStatus = ?, customFields = ?,
+            deviceName = ?, englishName = ?, email = ?
           WHERE id = ?
         `, [
           employeeName, department, section, unit, deviceModel, ram, storageType, storageSize,
           monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, JSON.stringify(customFields),
+          finalDeviceName, finalEnglishName, finalEmail,
           match.id
         ]);
         updatedCount++;
@@ -997,11 +1116,15 @@ app.post('/api/import', requireAdmin, upload.single('file'), async (req, res) =>
         await dbRun(`
           INSERT INTO devices (
             employeeName, employeeId, orgPath, department, section, unit, deviceModel, ram, storageType, storageSize,
-            monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, customFields,
+            deviceName, englishName, email
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
           employeeName, employeeId !== 'لا يوجد' ? employeeId : '', orgPath, department, section, unit, deviceModel, ram, storageType, storageSize,
-          monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, JSON.stringify(customFields)
+          monitorsCount, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, technicalStatus, JSON.stringify(customFields),
+          (deviceName && deviceName !== 'لا يوجد') ? deviceName : '',
+          (englishName && englishName !== 'لا يوجد') ? englishName : '',
+          (email && email !== 'لا يوجد') ? email : ''
         ]);
         addedCount++;
       }

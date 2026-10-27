@@ -310,7 +310,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                   <label class="comp-metric-label">
                     <input type="checkbox" class="comp-metric-cb" value="has_computer" checked>
                     <i class="bi bi-pc-display" style="color: var(--clr-warning, #f59e0b);"></i>
-                    <span>من لديه جهاز كمبيوتر أو أكثر</span>
+                    <span>من يملك جهاز حاسوب</span>
+                  </label>
+                  <label class="comp-metric-label">
+                    <input type="checkbox" class="comp-metric-cb" value="has_multiple" checked>
+                    <i class="bi bi-layers-fill" style="color: #6366f1;"></i>
+                    <span>من لديه أكثر من جهاز (جهازان فأكثر)</span>
                   </label>
                   <label class="comp-metric-label">
                     <input type="checkbox" class="comp-metric-cb" value="has_monitor" checked>
@@ -353,7 +358,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             <!-- Live Search -->
             <div class="search-box" style="position: relative; display: flex; align-items: center;">
               <i class="bi bi-search"></i>
-              <input type="text" id="searchInput" placeholder="ابحث باسم الموظف، السيريال (Service Tag)، الموديل، الإدارة..." style="padding-left: 32px;">
+              <input type="text" id="searchInput" placeholder="ابحث باسم الموظف، اللقب، الرقم الوظيفي، السيريال، الموديل، الإدارة..." style="padding-left: 32px;">
               <button type="button" id="clearSearchBtn" style="display: none; position: absolute; left: 8px; background: none; border: none; color: var(--tx-muted, #94a3b8); cursor: pointer; font-size: 1.15rem; line-height: 1; padding: 2px;" title="مسح البحث">&times;</button>
             </div>
           </div>
@@ -371,6 +376,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               <label for="filterNature"><span data-i18n="filter_type">نوع الجهاز:</span></label>
               <select id="filterNature">
                 <option value="all">الكل</option>
+                <option value="has_device">✅ يملك جهاز</option>
+                <option value="no_device">❌ ليس لديه جهاز</option>
                 <option value="Desktop"><span data-i18n="desktop">مكتبي (Desktop)</span></option>
                 <option value="Laptop"><span data-i18n="laptop">محمول (Laptop)</span></option>
                 <option value="Printer"><span data-i18n="printer">طابعة (Printer)</span></option>
@@ -409,7 +416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <th>اسم الموظف</th>
                 <th>القسم / الإدارة</th>
                 <th>الحالة التقنية</th>
-                <th>مُدخل البيانات</th>
+                <th>امتلاك جهاز</th>
                 <th class="admin-only-element">الإجراءات</th>
               </tr>
             </thead>
@@ -465,6 +472,16 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div>
               <label for="employeeId"><span>الرقم الوظيفي</span></label>
               <input type="text" id="employeeId" placeholder="مثال: 12345">
+            </div>
+          </div>
+          <div class="form-group" style="grid-column: 1 / -1; display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 5px;">
+            <div>
+              <label for="englishName"><span>اسم الموظف بالإنجليزي (Intune)</span></label>
+              <input type="text" id="englishName" placeholder="مثال: Yousef Hakiem">
+            </div>
+            <div>
+              <label for="email"><span>البريد الإلكتروني</span></label>
+              <input type="email" id="email" placeholder="مثال: yousef.hakiem@litc.ly" dir="ltr" style="text-align: right;">
             </div>
           </div>
           <div class="form-group" style="grid-column: 1 / -1; margin-top: 10px; margin-bottom: 5px;">
@@ -529,6 +546,10 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="form-group general-device-field">
             <label for="serviceTag"><span data-i18n="service_tag">السيرفس تاق (Service Tag)</span></label>
             <input type="text" id="serviceTag" placeholder="السيريال نمبر">
+          </div>
+          <div class="form-group general-device-field">
+            <label for="deviceName"><span>اسم الجهاز / الكمبيوتر (Device Name)</span></label>
+            <input type="text" id="deviceName" placeholder="مثال: SM-HAKIEM-DS" dir="ltr" style="text-align: right;">
           </div>
           
           <!-- PC Only Fields Grouping -->

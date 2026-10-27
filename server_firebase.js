@@ -28,8 +28,8 @@ app.use(express.json());
 app.use(cookieParser());
 
 // CLOUD SUSPENSION / MAINTENANCE MODE
-// The cloud version is temporarily suspended until local inventory data entry is finalized
-const CLOUD_SUSPENDED = true;
+// The cloud version is active
+const CLOUD_SUSPENDED = false;
 
 app.use((req, res, next) => {
   if (CLOUD_SUSPENDED) {
@@ -521,6 +521,45 @@ function filterAndSendDevices(devices, req, res) {
   res.json(filtered);
 }
 
+// Helper to lookup Intune device info
+function lookupIntuneDevice(serviceTag) {
+  if (!serviceTag || serviceTag === 'لا يوجد' || serviceTag === 'None') return null;
+  const cTag = String(serviceTag).trim().toUpperCase().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '');
+  if (!cTag) return null;
+
+  try {
+    const cache = loadLocalDevicesCache();
+    const found = cache.find(d => {
+      const k = (d.serviceTag || '').toUpperCase().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '');
+      return (k === cTag || k.replace(/0/g, 'O') === cTag.replace(/0/g, 'O') || k.replace(/5/g, 'S') === cTag.replace(/5/g, 'S')) && (d.deviceName || d.email);
+    });
+    if (found) {
+      return {
+        serviceTag: found.serviceTag,
+        deviceName: found.deviceName || '',
+        englishName: found.englishName || '',
+        email: found.email || '',
+        model: found.deviceModel || ''
+      };
+    }
+  } catch (e) {}
+  return null;
+}
+
+// Lookup Intune device info by Service Tag
+app.get('/api/intune/lookup/:tag', authenticateToken, async (req, res) => {
+  try {
+    const data = lookupIntuneDevice(req.params.tag);
+    if (data) {
+      res.json({ found: true, data });
+    } else {
+      res.json({ found: false });
+    }
+  } catch (error) {
+    res.json({ found: false });
+  }
+});
+
 app.get('/api/columns', authenticateToken, async (req, res) => {
   try {
     const snapshot = await db.collection('columns').get();
@@ -675,23 +714,39 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
   try {
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, monitorsDetails, dockingCount, dockingDetails, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, sharedUsers, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType
+      monitorsCount, monitorsDetails, dockingCount, dockingDetails, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, sharedUsers, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType,
+      deviceName, englishName, email
     } = req.body;
 
-    if (serviceTag && serviceTag.trim() !== '' && serviceTag.trim() !== 'لا يوجد' && serviceTag.trim() !== 'N/A' && serviceTag.trim() !== '-') {
-      const tagSnapshot = await db.collection('devices').where('serviceTag', '==', serviceTag.trim()).get();
+    let finalDeviceName = deviceName || '';
+    let finalEnglishName = englishName || '';
+    let finalEmail = email || '';
+    let finalDeviceModel = deviceModel || 'لا يوجد';
+    let finalServiceTag = serviceTag ? String(serviceTag).trim().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '') : 'لا يوجد';
+
+    if (finalServiceTag && finalServiceTag !== 'لا يوجد' && (!finalDeviceName || !finalEnglishName || !finalEmail)) {
+      const intuneMatch = lookupIntuneDevice(finalServiceTag);
+      if (intuneMatch) {
+        if (!finalDeviceName && intuneMatch.deviceName) finalDeviceName = intuneMatch.deviceName;
+        if (!finalEnglishName && intuneMatch.englishName) finalEnglishName = intuneMatch.englishName;
+        if (!finalEmail && intuneMatch.email) finalEmail = intuneMatch.email;
+        if ((!finalDeviceModel || finalDeviceModel === 'لا يوجد') && intuneMatch.model) finalDeviceModel = intuneMatch.model;
+        if (intuneMatch.serviceTag) finalServiceTag = intuneMatch.serviceTag;
+      }
+    }
+
+    if (finalServiceTag && finalServiceTag.trim() !== '' && finalServiceTag.trim() !== 'لا يوجد' && finalServiceTag.trim() !== 'N/A' && finalServiceTag.trim() !== '-') {
+      const tagSnapshot = await db.collection('devices').where('serviceTag', '==', finalServiceTag.trim()).get();
       if (!tagSnapshot.empty) {
         return res.status(400).json({ error: 'السيرفز تاق المُدخل مسجل مسبقاً لجهاز آخر! لا يمكن التكرار.' });
       }
     }
 
-
-
     const newDeviceData = {
-      assetType: (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer'),
+      assetType: (deviceNature === 'None' || finalDeviceModel === 'لا يوجد') ? 'None' : (assetType || 'Computer'),
       employeeName: employeeName || 'غير معروف',
       orgPath: orgPath || 'مجلس الإدارة',
-      deviceModel: deviceModel || 'لا يوجد',
+      deviceModel: finalDeviceModel,
       ram: ram || 'لا يوجد',
       storageType: storageType || 'SSD',
       storageSize: storageSize || 'لا يوجد',
@@ -700,7 +755,7 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
       dockingCount: parseInt(dockingCount) || 0,
       dockingDetails: dockingDetails || [],
       deviceNature: deviceNature || 'Desktop',
-      serviceTag: serviceTag || 'لا يوجد',
+      serviceTag: finalServiceTag,
       recurringIssues: recurringIssues || 'لا توجد مشاكل حالياً',
       notes: notes || 'لا يوجد',
       systemsUsed: systemsUsed || 'لا يوجد',
@@ -712,6 +767,9 @@ app.post('/api/devices', requirePermission('canAdd'), async (req, res) => {
       connectionType: connectionType || 'USB',
       osVersion: osVersion || '',
       ipAddress: ipAddress || '',
+      deviceName: finalDeviceName,
+      englishName: finalEnglishName,
+      email: finalEmail,
       department: '', circle: '', section: '', unit: '',
       created_by: req.user.username,
       created_at: new Date().toISOString()
@@ -742,11 +800,30 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
 
     const {
       employeeName, orgPath, deviceModel, ram, storageType, storageSize,
-      monitorsCount, monitorsDetails, dockingCount, dockingDetails, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, sharedUsers, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType
+      monitorsCount, monitorsDetails, dockingCount, dockingDetails, deviceNature, serviceTag, recurringIssues, notes, systemsUsed, phone, employeeId, sharedUsers, technicalStatus, customFields, connectionType, osVersion, ipAddress, assetType,
+      deviceName, englishName, email
     } = req.body;
 
-    if (serviceTag && serviceTag.trim() !== '' && serviceTag.trim() !== 'لا يوجد' && serviceTag.trim() !== 'N/A' && serviceTag.trim() !== '-') {
-      const tagSnapshot = await db.collection('devices').where('serviceTag', '==', serviceTag.trim()).get();
+    let updatedServiceTag = serviceTag !== undefined ? String(serviceTag).trim().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '') : device.serviceTag;
+    let updatedDeviceName = deviceName !== undefined ? deviceName : (device.deviceName || '');
+    let updatedEnglishName = englishName !== undefined ? englishName : (device.englishName || '');
+    let updatedEmail = email !== undefined ? email : (device.email || '');
+    let updatedDeviceModel = deviceModel !== undefined ? deviceModel : device.deviceModel;
+
+    // Auto-enrich from Intune if missing
+    if (updatedServiceTag && updatedServiceTag !== 'لا يوجد' && (!updatedDeviceName || !updatedEnglishName || !updatedEmail)) {
+      const intuneMatch = lookupIntuneDevice(updatedServiceTag);
+      if (intuneMatch) {
+        if (!updatedDeviceName && intuneMatch.deviceName) updatedDeviceName = intuneMatch.deviceName;
+        if (!updatedEnglishName && intuneMatch.englishName) updatedEnglishName = intuneMatch.englishName;
+        if (!updatedEmail && intuneMatch.email) updatedEmail = intuneMatch.email;
+        if ((!updatedDeviceModel || updatedDeviceModel === 'لا يوجد') && intuneMatch.model) updatedDeviceModel = intuneMatch.model;
+        if (intuneMatch.serviceTag) updatedServiceTag = intuneMatch.serviceTag;
+      }
+    }
+
+    if (updatedServiceTag && updatedServiceTag.trim() !== '' && updatedServiceTag.trim() !== 'لا يوجد' && updatedServiceTag.trim() !== 'N/A' && updatedServiceTag.trim() !== '-') {
+      const tagSnapshot = await db.collection('devices').where('serviceTag', '==', updatedServiceTag.trim()).get();
       const duplicate = tagSnapshot.docs.find(d => d.id !== id);
       if (duplicate) {
         return res.status(400).json({ error: 'السيرفز تاق المُدخل مسجل مسبقاً لجهاز آخر! لا يمكن التكرار.' });
@@ -768,13 +845,13 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
 
     const updatedData = {
       employeeName: updatedEmployeeName, orgPath: updatedOrgPath,
-      deviceModel: deviceModel !== undefined ? deviceModel : device.deviceModel,
+      deviceModel: updatedDeviceModel,
       ram: ram !== undefined ? ram : device.ram,
       storageType: storageType !== undefined ? storageType : device.storageType,
       storageSize: storageSize !== undefined ? storageSize : device.storageSize,
       monitorsCount: monitorsCount !== undefined ? parseInt(monitorsCount) || 1 : device.monitorsCount,
       deviceNature: deviceNature !== undefined ? deviceNature : device.deviceNature,
-      serviceTag: serviceTag !== undefined ? serviceTag : device.serviceTag,
+      serviceTag: updatedServiceTag,
       recurringIssues: recurringIssues !== undefined ? recurringIssues : device.recurringIssues,
       notes: notes !== undefined ? notes : device.notes,
       systemsUsed: systemsUsed !== undefined ? systemsUsed : device.systemsUsed,
@@ -786,7 +863,10 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
       connectionType: connectionType !== undefined ? connectionType : device.connectionType,
       osVersion: osVersion !== undefined ? osVersion : device.osVersion,
       ipAddress: ipAddress !== undefined ? ipAddress : device.ipAddress,
-      assetType: (deviceNature === 'None' || deviceModel === 'لا يوجد') ? 'None' : (req.body.assetType || 'Computer')
+      assetType: (deviceNature === 'None' || updatedDeviceModel === 'لا يوجد') ? 'None' : (req.body.assetType || 'Computer'),
+      deviceName: updatedDeviceName,
+      englishName: updatedEnglishName,
+      email: updatedEmail
     };
 
     await docRef.update(updatedData);
@@ -926,12 +1006,15 @@ app.get('/api/export', authenticateToken, async (req, res) => {
       const paths = d.orgPath ? d.orgPath.split('||') : [];
       const row = {
         "اسم الموظف": d.employeeName,
+        "اسم الموظف بالإنجليزي": d.englishName || '',
+        "البريد الإلكتروني": d.email || '',
         "الرقم الوظيفي": d.employeeId || '',
         "مجلس الإدارة / المكاتب": paths[0] || d.department || '',
         "الإدارة": paths[1] || d.section || '',
         "القسم": paths[2] || d.unit || '',
         "الوحدة": paths[3] || '',
         "نوع الجهاز": d.deviceModel,
+        "اسم الكمبيوتر": d.deviceName || '',
         "سعة الرام (RAM)": d.ram,
         "نوع الهاردسك": d.storageType,
         "حجم الهاردسك": d.storageSize,

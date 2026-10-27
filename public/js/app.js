@@ -585,6 +585,54 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
+  // Auto-fetch Intune details when Service Tag is entered
+  const serviceTagInput = document.getElementById('serviceTag');
+  if (serviceTagInput) {
+    const handleTagLookup = async function() {
+      const rawTag = this.value.trim().replace(/[\u200E\u200F\u202A-\u202E\uFEFF]/g, '');
+      if (!rawTag || rawTag.length < 3 || rawTag === 'لا يوجد' || rawTag.toUpperCase() === 'NONE') return;
+
+      try {
+        const res = await fetch(`/api/intune/lookup/${encodeURIComponent(rawTag)}`);
+        const json = await res.json();
+        if (json.found && json.data) {
+          const d = json.data;
+          const devNameEl = document.getElementById('deviceName');
+          const engNameEl = document.getElementById('englishName');
+          const emailEl = document.getElementById('email');
+          const modelEl = document.getElementById('deviceModel');
+
+          let filled = 0;
+          if (devNameEl && !devNameEl.value.trim() && d.deviceName) {
+            devNameEl.value = d.deviceName;
+            filled++;
+          }
+          if (engNameEl && !engNameEl.value.trim() && d.englishName) {
+            engNameEl.value = d.englishName;
+            filled++;
+          }
+          if (emailEl && !emailEl.value.trim() && d.email) {
+            emailEl.value = d.email;
+            filled++;
+          }
+          if (modelEl && (!modelEl.value.trim() || modelEl.value.trim() === 'لا يوجد') && d.model) {
+            modelEl.value = d.model;
+            filled++;
+          }
+
+          if (filled > 0) {
+            showToast(`تم التعرف على الجهاز من Intune: ${d.deviceName || d.serviceTag}`);
+          }
+        }
+      } catch (err) {
+        // Silent catch
+      }
+    };
+
+    serviceTagInput.addEventListener('blur', handleTagLookup);
+    serviceTagInput.addEventListener('change', handleTagLookup);
+  }
+
   
   // Verify user session
   const authenticated = await checkAuth();
@@ -748,7 +796,7 @@ async function fetchDevices() {
 // RENDER TABLE
 function renderTable() {
   const customKeys = getUniqueCustomKeys();
-  const totalCols = 5;
+  const totalCols = 6;
   
   // Update header first
   const tableHead = document.querySelector('#devicesTable thead');
@@ -759,6 +807,7 @@ function renderTable() {
         <th>${window.t ? window.t('th_employee') : 'اسم الموظف'}</th>
         <th>${window.t ? window.t('th_department') : 'المسمى الوظيفي'}</th>
         <th>${window.t ? window.t('th_status') : 'الحالة التقنية'}</th>
+        <th>${window.t ? window.t('th_has_device') : 'امتلاك جهاز'}</th>
         <th>${window.t ? window.t('th_actions') : 'الإجراءات'}</th>
       </tr>
     `;
@@ -801,6 +850,31 @@ function renderTable() {
     }
     const statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusDisplay}</span>`;
 
+    // Device Possession Badge (عنده جهاز أو لا)
+    const hasDevice = hasRealDevice(d);
+    let deviceBadge = '';
+    if (hasDevice) {
+      const rawNat = String(d.deviceNature || '').toLowerCase();
+      const rawMod = String(d.deviceModel || '').toLowerCase();
+      const isLaptop = rawNat === 'laptop' || rawNat === 'محمول' || /laptop|probook|latitude|macbook/i.test(rawMod);
+      const isDesktop = rawNat === 'desktop' || rawNat === 'مكتبي' || (!isLaptop && (d.assetType === 'Computer' || rawNat === 'desktop'));
+      let label = 'عنده جهاز';
+      let icon = 'bi-check-circle-fill';
+      if (isLaptop) {
+        label = 'عنده جهاز (محمول)';
+        icon = 'bi-laptop';
+      } else if (isDesktop) {
+        label = 'عنده جهاز (مكتبي)';
+        icon = 'bi-pc-display';
+      } else if (d.assetType === 'Printer') {
+        label = 'عنده طابعة';
+        icon = 'bi-printer';
+      }
+      deviceBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;"><i class="bi ${icon}"></i> ${label}</span>`;
+    } else {
+      deviceBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;"><i class="bi bi-x-circle-fill"></i> ليس لديه جهاز</span>`;
+    }
+
     let rowHtml = `
       <td data-label="الرقم الوظيفي">
         <div class="employee-cell">
@@ -810,6 +884,7 @@ function renderTable() {
       <td>
         <div class="employee-cell">
           <span class="emp-name">${d.employeeName}</span>
+          ${(d.englishName || d.email) ? `<span style="font-size: 0.78rem; color: var(--text-muted); display: block; direction: ltr; text-align: right; margin-top: 2px;">${[d.englishName, d.email].filter(Boolean).join(' &bull; ')}</span>` : ''}
         </div>
       </td>
       <td>
@@ -817,9 +892,10 @@ function renderTable() {
         <span style="font-size: 0.85rem; color: var(--text-muted);" title="${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : ''}">${d.orgPath ? d.orgPath.replace(/\|\|/g, ' > ') : '-'}</span>
       </td>
       <td>${statusBadge}</td>
-      <td><span class="badge badge-secondary" style="background: var(--bg-input); color: var(--text-muted); border: 1px solid var(--border);">${d.created_by || 'غير معروف'}</span></td>
-    `;
-    rowHtml += `
+      <td>
+        ${deviceBadge}
+        ${d.deviceName ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 3px; font-family: monospace; direction: ltr; text-align: right;"><i class="bi bi-display" style="font-size:0.75rem; margin-left:3px;"></i>${d.deviceName}</div>` : ''}
+      </td>
       <td>
         <div class="actions-cell">
           <button class="action-icon-btn btn-view" onclick="viewDeviceHistory('${d.id}')" title="سجل حركات الجهاز">
@@ -839,6 +915,46 @@ function renderTable() {
 }
 
 // HELPERS
+function hasRealDevice(d) {
+  if (!d) return false;
+  const nature = String(d.deviceNature || '').trim();
+  const asset = String(d.assetType || '').trim();
+  const model = String(d.deviceModel || '').trim();
+  const tag = String(d.serviceTag || '').trim();
+  const name = String(d.employeeName || '').trim();
+
+  // If nature is None and asset is None -> Definitely no device
+  if ((!nature || nature === 'None') && (!asset || asset === 'None')) {
+    return false;
+  }
+  
+  // Placeholder employees: "اسم (لا يوجد بيانات)"
+  if (name.includes('(لا يوجد بيانات)') && (model === 'لا يوجد' || !model) && (tag === 'لا يوجد' || !tag)) {
+    return false;
+  }
+  
+  // Explicit "لا يوجد" with None
+  if (nature === 'None' && (model === 'لا يوجد' || !model) && (tag === 'لا يوجد' || !tag)) {
+    return false;
+  }
+  if (asset === 'None' && (model === 'لا يوجد' || !model) && (tag === 'لا يوجد' || !tag)) {
+    return false;
+  }
+  if (model === 'لا يوجد' && tag === 'لا يوجد' && (nature === 'None' || asset === 'None')) {
+    return false;
+  }
+
+  // If nature is Desktop or Laptop, or asset is Computer/Printer/etc.
+  if (nature === 'Desktop' || nature === 'Laptop' || asset === 'Computer') {
+    return true;
+  }
+  
+  if (model && model !== 'لا يوجد' && model !== '—') return true;
+  if (tag && tag !== 'لا يوجد' && tag !== '—') return true;
+
+  return false;
+}
+
 function checkDeviceHasIssues(device) {
   const issues = String(device.recurringIssues || '').trim().toLowerCase();
   return issues !== '' && 
@@ -958,19 +1074,29 @@ function animateCounter(element, targetValue, duration = 700) {
 
 // UPDATE STATISTICS
 function updateStats() {
-  const actualDevices = devices.filter(d => d.assetType !== 'None' && d.deviceNature !== 'None');
+  const realDevices = devices.filter(d => hasRealDevice(d));
+
+  const realLaptops = realDevices.filter(d => {
+    const nat = String(d.deviceNature || '').toLowerCase();
+    const mod = String(d.deviceModel || '').toLowerCase();
+    return nat === 'laptop' || nat === 'محمول' || /laptop|probook|latitude|macbook/i.test(mod);
+  });
+  const realDesktops = realDevices.filter(d => !realLaptops.includes(d));
+
   const uniqueEmployees = new Set();
   devices.forEach(d => {
-    if (d.employeeId && String(d.employeeId).trim() !== '') {
-      uniqueEmployees.add(String(d.employeeId).trim());
-    }
+    const rawName = String(d.employeeName || '').trim();
+    if (!rawName) return;
+    const cleanName = rawName.replace(/\(لا يوجد بيانات\)/g, '').trim();
+    const key = (d.employeeId && String(d.employeeId).trim() !== '') ? ('ID_' + String(d.employeeId).trim()) : ('NAME_' + cleanName);
+    uniqueEmployees.add(key);
   });
 
-  animateCounter(statTotalDevices, actualDevices.length);
+  animateCounter(statTotalDevices, realDevices.length);
   if (statEmployees) animateCounter(statEmployees, uniqueEmployees.size);
-  animateCounter(statDesktops, devices.filter(d => d.deviceNature === 'Desktop').length);
-  animateCounter(statLaptops, devices.filter(d => d.deviceNature === 'Laptop').length);
-  animateCounter(statIssueDevices, actualDevices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length);
+  animateCounter(statDesktops, realDesktops.length);
+  animateCounter(statLaptops, realLaptops.length);
+  animateCounter(statIssueDevices, realDevices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length);
 }
 
 // CHARTS SYSTEM
@@ -1154,20 +1280,22 @@ function renderComparisons() {
       };
     }
     
-    const nature = d.deviceNature || 'Desktop';
-    if (d.assetType !== 'None' && d.deviceNature !== 'None') {
+    const isReal = hasRealDevice(d);
+    if (isReal) {
       employeeData[name].hasAnyRealDevice = true;
+      const rawNat = String(d.deviceNature || '').toLowerCase();
+      const rawMod = String(d.deviceModel || '').toLowerCase();
+      const isLaptop = rawNat === 'laptop' || rawNat === 'محمول' || /laptop|probook|latitude|macbook/i.test(rawMod);
+      if (isLaptop) {
+        employeeData[name].totalComputers += 1;
+        employeeData[name].laptopsCount += 1;
+      } else {
+        employeeData[name].totalComputers += 1;
+        employeeData[name].desktopsCount += 1;
+      }
     }
-    if (d.assetType === 'Monitor' || nature === 'Monitor' || d.monitorsCount > 0) {
+    if (d.assetType === 'Monitor' || d.deviceNature === 'Monitor' || (parseInt(d.monitorsCount) || 0) > 0) {
       employeeData[name].totalMonitors += (parseInt(d.monitorsCount) || 1);
-    }
-    
-    if (nature === 'Desktop') {
-      employeeData[name].totalComputers += 1;
-      employeeData[name].desktopsCount += 1;
-    } else if (nature === 'Laptop') {
-      employeeData[name].totalComputers += 1;
-      employeeData[name].laptopsCount += 1;
     }
   });
 
@@ -1182,18 +1310,21 @@ function renderComparisons() {
 
   // 2. Calculate comparison groups and lists
   const listHasComputer = [];
+  const listHasMultiple = [];
   const listHasMonitor = [];
   const listNoDevice = [];
 
   uniqueEmployees.forEach(emp => {
     if (emp.totalComputers >= 1) listHasComputer.push(emp.name);
+    if (emp.totalComputers >= 2) listHasMultiple.push(emp.name);
     if (emp.totalMonitors >= 2) listHasMonitor.push(emp.name);
     if (!emp.hasAnyRealDevice) listNoDevice.push(emp.name);
   });
 
   // Store lists in global state for modal reference
   window.comparisonLists = {
-    'has_computer': { title: 'الموظفون الذين لديهم جهاز كمبيوتر أو أكثر', list: listHasComputer },
+    'has_computer': { title: 'الموظفون الذين بحوزتهم جهاز حاسوب (جهاز واحد فما فوق)', list: listHasComputer },
+    'has_multiple': { title: 'الموظفون الذين بحوزتهم أكثر من جهاز (جهازان فأكثر)', list: listHasMultiple },
     'has_monitor': { title: 'الموظفون الذين لديهم أكثر من شاشة', list: listHasMonitor },
     'no_device': { title: 'الموظفون الذين ليس لديهم أي جهاز', list: listNoDevice }
   };
@@ -1205,11 +1336,26 @@ function renderComparisons() {
       <div class="comparison-card" onclick="showCategoryEmployees('has_computer')">
         <div class="card-icon"><i class="bi bi-pc-display"></i></div>
         <div class="card-info">
-          <h4>من لديه جهاز كمبيوتر أو أكثر</h4>
+          <h4>من يملك جهاز حاسوب</h4>
           <div class="progress-bar-container">
             <div class="progress-bar bg-warning" style="width: ${(listHasComputer.length/totalEmployees)*100}%"></div>
           </div>
           <p class="count-text">${listHasComputer.length} ${window.t ? window.t('comp_employee') : 'موظف'} (${((listHasComputer.length/totalEmployees)*100).toFixed(1)}%)</p>
+        </div>
+      </div>
+    `;
+  }
+
+  if (metrics.has_multiple) {
+    gridHtml += `
+      <div class="comparison-card" onclick="showCategoryEmployees('has_multiple')">
+        <div class="card-icon"><i class="bi bi-layers-fill" style="color: #6366f1;"></i></div>
+        <div class="card-info">
+          <h4>من لديه أكثر من جهاز (جهازان فأكثر)</h4>
+          <div class="progress-bar-container">
+            <div class="progress-bar" style="background: #6366f1; width: ${(listHasMultiple.length/totalEmployees)*100}%"></div>
+          </div>
+          <p class="count-text">${listHasMultiple.length} ${window.t ? window.t('comp_employee') : 'موظف'} (${((listHasMultiple.length/totalEmployees)*100).toFixed(1)}%)</p>
         </div>
       </div>
     `;
@@ -1270,16 +1416,29 @@ function showCategoryEmployees(key) {
       `;
     } else {
       listEl.innerHTML = categoryData.list.map(name => {
-        // Find employee department/section for detailed view
-        const empDevices = devices.filter(d => d.employeeName && d.employeeName.trim() === name);
-        const deptInfo = empDevices.length > 0 ? empDevices[0].department : '';
-        const sectInfo = empDevices.length > 0 && empDevices[0].section ? ` / ${empDevices[0].section}` : '';
+        // Find employee department/section and device count for detailed view
+        const empAll = devices.filter(d => d.employeeName && d.employeeName.trim() === name);
+        const empRealDevices = empAll.filter(d => hasRealDevice(d));
+        const deptInfo = empAll.length > 0 ? (empAll[0].department || '') : '';
+        const sectInfo = empAll.length > 0 && empAll[0].section ? ` / ${empAll[0].section}` : '';
         
+        let countBadge = '';
+        if (empRealDevices.length > 1) {
+          countBadge = `<span class="badge" style="background: rgba(99, 102, 241, 0.15); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.3); font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 8px;"><i class="bi bi-layers-fill"></i> ${empRealDevices.length} أجهزة</span>`;
+        } else if (empRealDevices.length === 1) {
+          countBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 8px;"><i class="bi bi-check-circle-fill"></i> جهاز واحد</span>`;
+        } else {
+          countBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.3); font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 8px;"><i class="bi bi-x-circle-fill"></i> لا يملك جهاز</span>`;
+        }
+
         return `
           <li style="display: flex; justify-content: space-between; align-items: center; padding: 0.85rem 1.15rem; background-color: var(--bg-input); border: 1px solid var(--border-color); border-radius: var(--border-radius-md); transition: all var(--transition-speed);">
             <div style="display: flex; flex-direction: column;">
-              <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${name}</span>
-              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-top: 0.15rem;">${deptInfo}${sectInfo}</span>
+              <div style="display: flex; align-items: center;">
+                <span style="font-weight: 700; font-size: 0.95rem; color: var(--text-main);">${name}</span>
+                ${countBadge}
+              </div>
+              <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; margin-top: 0.25rem;">${deptInfo}${sectInfo}</span>
             </div>
             <div>
               <button class="action-btn btn-secondary" onclick="filterTableByEmployee('${name}')" style="padding: 0.45rem 1rem; font-size: 0.8rem; font-weight: 700; border-radius: var(--border-radius-sm); border: 1px solid var(--border-color);" title="تصفية الجدول">
@@ -1339,16 +1498,90 @@ function normalizeArabic(text) {
     .trim();
 }
 
+function extractSurname(employeeName) {
+  if (!employeeName) return '';
+  let cleanName = employeeName.replace(/\([^)]*\)/g, '').replace(/[-–—]/g, '').trim();
+  const words = cleanName.split(/\s+/).filter(Boolean);
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0];
+  
+  if (words.length >= 2) {
+    const prevWord = words[words.length - 2];
+    const lastWord = words[words.length - 1];
+    const normPrev = normalizeArabic(prevWord);
+    if (['بن', 'ابن', 'ابو', 'بو', 'ال', 'اولاد'].includes(normPrev)) {
+      return prevWord + ' ' + lastWord;
+    }
+  }
+  return words[words.length - 1];
+}
+
+function getWordVariants(word) {
+  if (!word) return [];
+  const norm = normalizeArabic(word);
+  if (!norm) return [];
+  const variants = new Set([norm]);
+  
+  // Strip or add 'ال' (Definite Article)
+  if (norm.startsWith('ال') && norm.length > 3) {
+    variants.add(norm.substring(2));
+  } else if (!norm.startsWith('ال') && norm.length >= 2) {
+    variants.add('ال' + norm);
+  }
+  
+  // Handle 'ابو' / 'بو'
+  if (norm.startsWith('ابو ') || norm.startsWith('ابو')) {
+    const base = norm.replace(/^ابو\s*/, '');
+    variants.add('ابوراس');
+    variants.add('ابو ' + base);
+    variants.add('بو' + base);
+    variants.add('بو ' + base);
+    variants.add(base);
+  } else if (norm.startsWith('بو ') || norm.startsWith('بو')) {
+    const base = norm.replace(/^بو\s*/, '');
+    variants.add('ابو' + base);
+    variants.add('ابو ' + base);
+    variants.add('بو' + base);
+    variants.add(base);
+  }
+
+  // Handle 'عبد'
+  if (norm.startsWith('عبد ') || norm.startsWith('عبد')) {
+    const base = norm.replace(/^عبد\s*/, '');
+    variants.add('عبد' + base);
+    variants.add('عبد ' + base);
+  }
+
+  // Handle 'بن' / 'ابن'
+  if (norm.startsWith('بن ') || norm.startsWith('بن')) {
+    const base = norm.replace(/^بن\s*/, '');
+    variants.add('ابن ' + base);
+    variants.add('بن ' + base);
+    variants.add('بن' + base);
+  }
+
+  return Array.from(variants);
+}
+
 function matchDeviceSearch(device, query) {
   if (!query) return true;
   const normQuery = normalizeArabic(query);
   const queryTokens = normQuery.split(' ').filter(Boolean);
   if (queryTokens.length === 0) return true;
 
+  // Extract surname and build surname variants
+  const surname = extractSurname(device.employeeName);
+  const surnameVariants = getWordVariants(surname);
+
   // Compile all searchable fields
   const haystack = [
     device.employeeName,
+    surname,
+    ...surnameVariants,
     device.employeeId,
+    device.englishName,
+    device.email,
+    device.deviceName,
     device.orgPath,
     device.department,
     device.section,
@@ -1372,6 +1605,15 @@ function matchDeviceSearch(device, query) {
     device.monitorsCount ? `${device.monitorsCount} شاشة` : '',
     device.monitorsCount ? `${device.monitorsCount} monitors` : ''
   ];
+
+  // Also add variants for all words in employee name
+  if (device.employeeName) {
+    const empWords = device.employeeName.split(/\s+/).filter(Boolean);
+    empWords.forEach(w => {
+      const wVars = getWordVariants(w);
+      wVars.forEach(v => haystack.push(v));
+    });
+  }
 
   if (Array.isArray(device.customFields)) {
     device.customFields.forEach(cf => {
@@ -1402,10 +1644,13 @@ function matchDeviceSearch(device, query) {
   const rawAlphaHaystack = normHaystack.replace(/[^a-z0-9\u0621-\u064A]/g, '');
 
   return queryTokens.every(token => {
-    if (normHaystack.includes(token)) return true;
-    const cleanToken = token.replace(/[^a-z0-9\u0621-\u064A]/g, '');
-    if (cleanToken && rawAlphaHaystack.includes(cleanToken)) return true;
-    return false;
+    const tokenVariants = getWordVariants(token);
+    return tokenVariants.some(v => {
+      if (normHaystack.includes(v)) return true;
+      const cleanV = v.replace(/[^a-z0-9\u0621-\u064A]/g, '');
+      if (cleanV && rawAlphaHaystack.includes(cleanV)) return true;
+      return false;
+    });
   });
 }
 
@@ -1418,30 +1663,31 @@ function matchDeviceDept(device, deptVal) {
   const dSec = normalizeArabic(device.section || '');
   const dUnit = normalizeArabic(device.unit || '');
 
-  // 1. Direct or partial path inclusion
-  if (dOrg && (dOrg.includes(normDeptVal) || normDeptVal.includes(dOrg))) return true;
+  // Split selected path into segments
+  const selectedSegments = normDeptVal.split('||').map(s => s.trim()).filter(Boolean);
+  if (selectedSegments.length === 0) return true;
 
-  // 2. Direct check on individual attributes
-  if (dDept && (dDept === normDeptVal || normDeptVal.includes(dDept) || dDept.includes(normDeptVal))) return true;
-  if (dSec && (dSec === normDeptVal || normDeptVal.includes(dSec) || dSec.includes(normDeptVal))) return true;
-  if (dUnit && (dUnit === normDeptVal || normDeptVal.includes(dUnit) || dUnit.includes(normDeptVal))) return true;
-
-  // 3. Match against the target segment (last path element)
-  const segments = normDeptVal.split('||').map(s => s.trim()).filter(Boolean);
-  if (segments.length > 0) {
-    const target = segments[segments.length - 1];
-    if (dOrg.includes(target) || dDept.includes(target) || dSec.includes(target) || dUnit.includes(target)) {
-      return true;
-    }
-  }
-
-  // 4. Handle prefix differences e.g. "التجارية" vs "الإدارة التجارية"
+  // The most specific target node selected by the user (the last item in the selected path)
+  const targetLeaf = selectedSegments[selectedSegments.length - 1];
   const stripPrefix = s => s.replace(/^(الاداره|اداره|قسم|مكتب|وحده|دائره)\s+/, '').trim();
-  const strippedSelected = stripPrefix(normDeptVal);
-  const strippedDept = stripPrefix(dDept);
-  if (strippedSelected && strippedDept && (strippedSelected.includes(strippedDept) || strippedDept.includes(strippedSelected))) {
-    return true;
+  const strippedTarget = stripPrefix(targetLeaf);
+
+  // 1. Direct check: the employee must belong to this specific leaf node or lower
+  if (dOrg && dOrg.includes(targetLeaf)) return true;
+  if (dUnit && (dUnit === targetLeaf || dUnit.includes(targetLeaf))) return true;
+  if (dSec && (dSec === targetLeaf || dSec.includes(targetLeaf))) return true;
+  if (dDept && (dDept === targetLeaf || dDept.includes(targetLeaf))) return true;
+
+  // 2. Prefix-flexible check (e.g. "المقسمات الدولية" matches "وحدة المقسمات الدولية")
+  if (strippedTarget && strippedTarget.length >= 3) {
+    if (dOrg && dOrg.includes(strippedTarget)) return true;
+    if (dUnit && stripPrefix(dUnit).includes(strippedTarget)) return true;
+    if (dSec && stripPrefix(dSec).includes(strippedTarget)) return true;
+    if (dDept && stripPrefix(dDept).includes(strippedTarget)) return true;
   }
+
+  // 3. Or employee's full orgPath starts with or includes the full selected path
+  if (dOrg && dOrg.includes(normDeptVal)) return true;
 
   return false;
 }
@@ -1449,10 +1695,19 @@ function matchDeviceDept(device, deptVal) {
 function matchDeviceNature(device, natureVal) {
   if (!natureVal || natureVal === 'all') return true;
 
+  const target = natureVal.trim().toLowerCase();
+
+  if (target === 'has_device') {
+    return hasRealDevice(device);
+  }
+
+  if (target === 'no_device') {
+    return !hasRealDevice(device);
+  }
+
   const rawNature = String(device.deviceNature || '').trim().toLowerCase();
   const rawAsset = String(device.assetType || '').trim().toLowerCase();
   const rawModel = String(device.deviceModel || '').trim().toLowerCase();
-  const target = natureVal.trim().toLowerCase();
 
   if (target === 'desktop') {
     return rawNature === 'desktop' || 
@@ -1918,6 +2173,12 @@ function openEditModal(id) {
   
   document.getElementById('employeeName').value = d.employeeName || '';
   document.getElementById('employeeId').value = d.employeeId || '';
+  const engInput = document.getElementById('englishName');
+  if (engInput) engInput.value = d.englishName || '';
+  const emailInput = document.getElementById('email');
+  if (emailInput) emailInput.value = d.email || '';
+  const devNameInput = document.getElementById('deviceName');
+  if (devNameInput) devNameInput.value = d.deviceName || '';
   const sharedUsersInput = document.getElementById('sharedUsers');
   if (sharedUsersInput) sharedUsersInput.value = d.sharedUsers || '';
   
@@ -2044,6 +2305,9 @@ async function handleFormSubmit(e) {
     dockingCount: dc,
     employeeName: document.getElementById('employeeName').value.trim(),
     employeeId: document.getElementById('employeeId').value.trim(),
+    englishName: document.getElementById('englishName') ? document.getElementById('englishName').value.trim() : '',
+    email: document.getElementById('email') ? document.getElementById('email').value.trim() : '',
+    deviceName: document.getElementById('deviceName') ? document.getElementById('deviceName').value.trim() : '',
     sharedUsers: document.getElementById('sharedUsers').value.trim(),
     orgPath: document.getElementById('orgPath').value.trim(),
     deviceNature: document.getElementById('assetType').value === 'Computer' ? document.getElementById('deviceNature').value : document.getElementById('assetType').value,
@@ -2206,6 +2470,8 @@ function viewDeviceDetails(id) {
             <div class="tech-detail-grid">
               <div class="tech-item" style="grid-column: 1 / -1;"><span class="tech-label">مكان الوظيفة:</span> <span class="tech-val">${d.orgPath ? d.orgPath.split('||').join(' <i class="bi bi-chevron-left" style="font-size:0.75rem;margin:0 4px;"></i> ') : 'لا يوجد'}</span></div>
               <div class="tech-item"><span class="tech-label">المستلم:</span> <span class="tech-val">${d.employeeName} ${d.employeeId ? ' (' + d.employeeId + ')' : ''}</span></div>
+              <div class="tech-item"><span class="tech-label">الاسم بالإنجليزية:</span> <span class="tech-val" style="direction: ltr; text-align: right;">${d.englishName || 'لا يوجد'}</span></div>
+              <div class="tech-item" style="grid-column: 1 / -1;"><span class="tech-label">البريد الإلكتروني:</span> <span class="tech-val" style="direction: ltr; text-align: right;">${d.email ? `<a href="mailto:${d.email}" style="color: var(--primary-color); text-decoration: underline;">${d.email}</a>` : 'لا يوجد'}</span></div>
             </div>
             ${customFieldsEmployeeHtml}
           </div>
@@ -2215,6 +2481,7 @@ function viewDeviceDetails(id) {
             <h5>المواصفات التقنية الفنية</h5>
             <div class="tech-detail-grid">
               <div class="tech-item"><span class="tech-label">الموديل:</span> <span class="tech-val">${d.deviceModel}</span></div>
+              <div class="tech-item"><span class="tech-label">اسم الجهاز (Computer Name):</span> <span class="tech-val" style="direction: ltr; text-align: right;"><code>${d.deviceName || 'لا يوجد'}</code></span></div>
               <div class="tech-item"><span class="tech-label">طبيعة الجهاز:</span> <span class="tech-val">${translateNature(d.deviceNature)}</span></div>
               <div class="tech-item"><span class="tech-label">الذاكرة العشوائية:</span> <span class="tech-val">${d.ram || 'غير متوفر'}</span></div>
               <div class="tech-item"><span class="tech-label">سعة التخزين:</span> <span class="tech-val">${d.storageType} ${d.storageSize}</span></div>

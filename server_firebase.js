@@ -252,17 +252,19 @@ app.post('/api/auth/login', async (req, res) => {
   if (!username || !password) return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
 
   try {
-    const usersRef = db.collection('users');
     let user;
     let userId;
 
-    try {
-      const snapshot = await usersRef.where('username', '==', username.trim()).get();
-      if (!snapshot.empty) {
-        snapshot.forEach(doc => { user = doc.data(); userId = doc.id; });
+    if (db) {
+      try {
+        const usersRef = db.collection('users');
+        const snapshot = await usersRef.where('username', '==', username.trim()).get();
+        if (!snapshot.empty) {
+          snapshot.forEach(doc => { user = doc.data(); userId = doc.id; });
+        }
+      } catch (dbErr) {
+        console.warn('Firestore login lookup failed, falling back to local users cache:', dbErr.message);
       }
-    } catch (dbErr) {
-      console.warn('Firestore login lookup failed, checking local users cache:', dbErr.message);
     }
 
     if (!user) {
@@ -284,10 +286,11 @@ app.post('/api/auth/login', async (req, res) => {
     }
 
     const token = jwt.sign({ id: userId, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '365d' });
-    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 365 * 24 * 60 * 60 * 1000 });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000 });
     res.json({ success: true, user: { username: user.username, role: user.role, permissions: user.permissions } });
   } catch (error) {
-    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
+    console.error('Login route error:', error);
+    res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول: ' + error.message });
   }
 });
 

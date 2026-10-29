@@ -346,6 +346,13 @@ function setupUserManagement() {
       const submitBtn = addUserForm.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;
 
+      const newPass = passwordInput.value;
+      if (newPass.length < 8) {
+        showToast('يجب أن لا تقل كلمة المرور عن 8 خانات لأسباب أمنية', true);
+        if (submitBtn) submitBtn.disabled = false;
+        return;
+      }
+
       try {
         const res = await fetch('/api/admin/users', {
           method: 'POST',

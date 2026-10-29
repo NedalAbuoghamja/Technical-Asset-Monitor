@@ -39,6 +39,66 @@ const JWT_SECRET = process.env.JWT_SECRET || 'super_secret_jwt_key_2026';
 app.use(express.json());
 app.use(cookieParser());
 
+// ==========================================
+// SECURITY HEADERS MIDDLEWARE (Equivalent to Helmet)
+// ==========================================
+app.use((req, res, next) => {
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  next();
+});
+
+// ==========================================
+// RATE LIMITING MIDDLEWARE (Brute-force protection)
+// ==========================================
+const loginAttempts = new Map();
+const RATE_LIMIT_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+const MAX_LOGIN_ATTEMPTS = 5; // Max 5 failed attempts per window
+
+function checkLoginRateLimit(req, res, next) {
+  const ip = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+  const username = (req.body.username || '').trim().toLowerCase();
+  const key = `${ip}_${username}`;
+  const now = Date.now();
+
+  const record = loginAttempts.get(key);
+  if (record) {
+    if (now - record.firstAttempt > RATE_LIMIT_WINDOW_MS) {
+      loginAttempts.delete(key);
+    } else if (record.count >= MAX_LOGIN_ATTEMPTS) {
+      const remainingMinutes = Math.ceil((RATE_LIMIT_WINDOW_MS - (now - record.firstAttempt)) / 60000);
+      return res.status(429).json({
+        error: `تم تجاوز الحد الأقصى للمحاولات الخاطئة. تم قفل الحساب مؤقتاً لحمايتك، يرجى المحاولة بعد ${remainingMinutes} دقيقة.`
+      });
+    }
+  }
+  next();
+}
+
+function recordFailedLogin(req) {
+  const ip = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+  const username = (req.body.username || '').trim().toLowerCase();
+  const key = `${ip}_${username}`;
+  const now = Date.now();
+
+  const record = loginAttempts.get(key);
+  if (!record || now - record.firstAttempt > RATE_LIMIT_WINDOW_MS) {
+    loginAttempts.set(key, { count: 1, firstAttempt: now });
+  } else {
+    record.count += 1;
+  }
+}
+
+function clearLoginAttempts(req) {
+  const ip = req.headers['x-forwarded-for'] || req.ip || 'unknown';
+  const username = (req.body.username || '').trim().toLowerCase();
+  loginAttempts.delete(`${ip}_${username}`);
+}
+
 // CLOUD SUSPENSION / MAINTENANCE MODE
 // The cloud version is active
 const CLOUD_SUSPENDED = false;
@@ -247,7 +307,7 @@ app.get('/api/events', (req, res) => {
 // AUTHENTICATION APIs
 // ==========================================
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
   const { username, password } = req.body;
   if (!username || !password) return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
 
@@ -281,10 +341,18 @@ app.post('/api/auth/login', async (req, res) => {
       }
     }
 
-    if (!user) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    if (!user) {
+      recordFailedLogin(req);
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    }
 
     const hashed = hashPassword(password);
-    if (user.password !== hashed) return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    if (user.password !== hashed) {
+      recordFailedLogin(req);
+      return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
+    }
+
+    clearLoginAttempts(req);
 
     if (user.mustChangePassword) {
       return res.json({ requirePasswordChange: true, username: user.username });

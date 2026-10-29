@@ -349,7 +349,8 @@ app.post('/api/auth/login', async (req, res) => {
   }
 
   try {
-    const user = await dbGet(`SELECT * FROM users WHERE username = ?`, [username.trim()]);
+    const cleanUser = username.trim().toLowerCase();
+    const user = await dbGet(`SELECT * FROM users WHERE LOWER(username) = ?`, [cleanUser]);
     if (!user) {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }

@@ -254,13 +254,18 @@ app.post('/api/auth/login', async (req, res) => {
   try {
     let user;
     let userId;
+    const cleanUser = username.trim().toLowerCase();
 
     if (db) {
       try {
         const usersRef = db.collection('users');
-        const snapshot = await usersRef.where('username', '==', username.trim()).get();
+        const snapshot = await usersRef.get();
         if (!snapshot.empty) {
-          snapshot.forEach(doc => { user = doc.data(); userId = doc.id; });
+          const match = snapshot.docs.find(d => (d.data().username || '').trim().toLowerCase() === cleanUser);
+          if (match) {
+            user = match.data();
+            userId = match.id;
+          }
         }
       } catch (dbErr) {
         console.warn('Firestore login lookup failed, falling back to local users cache:', dbErr.message);
@@ -269,7 +274,7 @@ app.post('/api/auth/login', async (req, res) => {
 
     if (!user) {
       const localUsers = loadLocalUsersCache();
-      const found = localUsers.find(u => u.username === username.trim());
+      const found = localUsers.find(u => (u.username || '').trim().toLowerCase() === cleanUser);
       if (found) {
         user = found;
         userId = found.id;

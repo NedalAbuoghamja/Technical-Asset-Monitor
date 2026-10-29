@@ -833,23 +833,6 @@ function renderTable() {
   filteredDevices.forEach(d => {
     const tr = document.createElement('tr');
     
-    // Status Badge
-    const status = d.technicalStatus || 'سليم';
-    let statusClass = 'badge-success';
-    let statusIcon = 'bi-check-circle-fill';
-    let statusDisplay = window.t ? window.t('status_clean') : status;
-    
-    if (status === 'بحاجة لصيانة') {
-      statusClass = 'badge-danger';
-      statusIcon = 'bi-tools';
-      statusDisplay = window.t ? window.t('status_need_maint') : status;
-    } else if (status === 'تحت الصيانة') {
-      statusClass = 'badge-warning';
-      statusIcon = 'bi-gear-wide-connected';
-      statusDisplay = window.t ? window.t('status_in_maint') : status;
-    }
-    const statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusDisplay}</span>`;
-
     // Device Possession Badge (عنده جهاز أو لا)
     const hasDevice = hasRealDevice(d);
     let deviceBadge = '';
@@ -873,6 +856,26 @@ function renderTable() {
       deviceBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;"><i class="bi ${icon}"></i> ${label}</span>`;
     } else {
       deviceBadge = `<span class="badge" style="background: rgba(239, 68, 68, 0.15); color: #ef4444; border: 1px solid rgba(239, 68, 68, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;"><i class="bi bi-x-circle-fill"></i> ليس لديه جهاز</span>`;
+    }
+
+    // Status Badge
+    let statusBadge = '<span style="color: var(--text-muted); font-size: 0.85rem;">—</span>';
+    if (hasDevice) {
+      const status = d.technicalStatus || 'سليم';
+      let statusClass = 'badge-success';
+      let statusIcon = 'bi-check-circle-fill';
+      let statusDisplay = window.t ? window.t('status_clean') : status;
+      
+      if (status === 'بحاجة لصيانة') {
+        statusClass = 'badge-danger';
+        statusIcon = 'bi-tools';
+        statusDisplay = window.t ? window.t('status_need_maint') : status;
+      } else if (status === 'تحت الصيانة') {
+        statusClass = 'badge-warning';
+        statusIcon = 'bi-gear-wide-connected';
+        statusDisplay = window.t ? window.t('status_in_maint') : status;
+      }
+      statusBadge = `<span class="badge ${statusClass}"><i class="bi ${statusIcon}"></i> ${statusDisplay}</span>`;
     }
 
     let rowHtml = `
@@ -1168,8 +1171,9 @@ function renderCharts() {
   // 2. Status Chart (Bar)
   if (statusChartInstance) statusChartInstance.destroy();
   
-  const cleanCount = devices.filter(d => (d.technicalStatus || 'سليم') === 'سليم').length;
-  const issueCount = devices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length;
+  const realDevices = devices.filter(hasRealDevice);
+  const cleanCount = realDevices.filter(d => (d.technicalStatus || 'سليم') === 'سليم').length;
+  const issueCount = realDevices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length;
   
   const ctxStatus = document.getElementById('statusChart').getContext('2d');
   statusChartInstance = new Chart(ctxStatus, {

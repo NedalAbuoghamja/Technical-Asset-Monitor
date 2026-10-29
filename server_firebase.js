@@ -822,8 +822,8 @@ app.put('/api/devices/:id', requirePermission('canEdit'), async (req, res) => {
     let updatedEmail = email !== undefined ? email : (device.email || '');
     let updatedDeviceModel = deviceModel !== undefined ? deviceModel : device.deviceModel;
 
-    // Auto-enrich from Intune if missing
-    if (updatedServiceTag && updatedServiceTag !== 'لا يوجد' && (!updatedDeviceName || !updatedEnglishName || !updatedEmail)) {
+    // Auto-enrich from Intune only if this is a newly provided service tag that changed
+    if (updatedServiceTag && updatedServiceTag !== 'لا يوجد' && updatedServiceTag !== device.serviceTag && (!updatedDeviceName || !updatedEnglishName || !updatedEmail)) {
       const intuneMatch = lookupIntuneDevice(updatedServiceTag);
       if (intuneMatch) {
         if (!updatedDeviceName && intuneMatch.deviceName) updatedDeviceName = intuneMatch.deviceName;

@@ -1837,10 +1837,13 @@ function applySearchAndFilters() {
   // Update counter badge
   const countBadge = document.getElementById('devicesFilterCount');
   if (countBadge) {
+    const realTotal = devices.filter(hasRealDevice).length;
+    const realFiltered = filteredDevices.filter(hasRealDevice).length;
+
     if (query || deptVal !== 'all' || natureVal !== 'all' || statusVal !== 'all') {
-      countBadge.textContent = `${filteredDevices.length} من أصل ${devices.length} جهاز`;
+      countBadge.textContent = `${filteredDevices.length} سجل (${realFiltered} جهاز فعلي)`;
     } else {
-      countBadge.textContent = `${devices.length} جهاز`;
+      countBadge.textContent = `${realTotal} جهاز فعلي (من إجمالي ${devices.length} موظف)`;
     }
   }
 

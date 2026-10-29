@@ -10,14 +10,26 @@ const { initializeApp, cert, getApps } = require('firebase-admin/app');
 const { getFirestore, FieldValue, Filter } = require('firebase-admin/firestore');
 
 // Initialize Firebase Admin
-const serviceAccount = require('./serviceAccountKey.json');
-if (!getApps().length) {
-  initializeApp({
-    credential: cert(serviceAccount)
-  });
-}
+let db;
+try {
+  let serviceAccount;
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+  } else if (fs.existsSync(path.join(__dirname, 'serviceAccountKey.json'))) {
+    serviceAccount = require('./serviceAccountKey.json');
+  }
 
-const db = getFirestore();
+  if (serviceAccount && !getApps().length) {
+    initializeApp({
+      credential: cert(serviceAccount)
+    });
+  }
+  if (getApps().length) {
+    db = getFirestore();
+  }
+} catch (err) {
+  console.error("Firebase Admin initialization error:", err.message);
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;

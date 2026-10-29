@@ -840,7 +840,7 @@ function renderTable() {
   filteredDevices.forEach(d => {
     const tr = document.createElement('tr');
     
-    // Device Possession Badge (عنده جهاز أو لا)
+    // Device Possession Badge (لديه جهاز أو لا)
     const hasDevice = hasRealDevice(d);
     let deviceBadge = '';
     if (hasDevice) {
@@ -848,16 +848,16 @@ function renderTable() {
       const rawMod = String(d.deviceModel || '').toLowerCase();
       const isLaptop = rawNat === 'laptop' || rawNat === 'محمول' || /laptop|probook|latitude|macbook/i.test(rawMod);
       const isDesktop = rawNat === 'desktop' || rawNat === 'مكتبي' || (!isLaptop && (d.assetType === 'Computer' || rawNat === 'desktop'));
-      let label = 'عنده جهاز';
+      let label = 'لديه جهاز';
       let icon = 'bi-check-circle-fill';
       if (isLaptop) {
-        label = 'عنده جهاز (محمول)';
+        label = 'لديه جهاز (محمول)';
         icon = 'bi-laptop';
       } else if (isDesktop) {
-        label = 'عنده جهاز (مكتبي)';
+        label = 'لديه جهاز (مكتبي)';
         icon = 'bi-pc-display';
       } else if (d.assetType === 'Printer') {
-        label = 'عنده طابعة';
+        label = 'لديه طابعة';
         icon = 'bi-printer';
       }
       deviceBadge = `<span class="badge" style="background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.35); font-weight: 600; padding: 4px 10px; border-radius: 6px; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;"><i class="bi ${icon}"></i> ${label}</span>`;

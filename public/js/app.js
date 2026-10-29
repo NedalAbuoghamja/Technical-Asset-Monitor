@@ -2464,9 +2464,9 @@ function viewDeviceDetails(id) {
       <div class="tech-card-header">
         <div class="tech-card-title">
           <h4>بطاقة مواصفات العهدة التقنية</h4>
-          <span>اسم الموظف: ${d.employeeName} ${d.employeeId ? ' (' + d.employeeId + ')' : ''}</span>
+          <span>اسم الموظف: ${d.employeeName}</span>
         </div>
-        <div class="tech-card-badge">ID: #${d.id}</div>
+        <div class="tech-card-badge">ID: #${d.employeeId ? d.employeeId : d.id}</div>
       </div>
       
       <div class="tech-card-details">
@@ -2476,7 +2476,8 @@ function viewDeviceDetails(id) {
             <h5>بيانات الجهة والموظف</h5>
             <div class="tech-detail-grid">
               <div class="tech-item" style="grid-column: 1 / -1;"><span class="tech-label">مكان الوظيفة:</span> <span class="tech-val">${d.orgPath ? d.orgPath.split('||').join(' <i class="bi bi-chevron-left" style="font-size:0.75rem;margin:0 4px;"></i> ') : 'لا يوجد'}</span></div>
-              <div class="tech-item"><span class="tech-label">المستلم:</span> <span class="tech-val">${d.employeeName} ${d.employeeId ? ' (' + d.employeeId + ')' : ''}</span></div>
+              <div class="tech-item"><span class="tech-label">المستلم:</span> <span class="tech-val">${d.employeeName}</span></div>
+              <div class="tech-item"><span class="tech-label">الرقم الوظيفي:</span> <span class="tech-val" style="font-weight: 700; color: var(--primary-color);">${d.employeeId || 'لا يوجد'}</span></div>
               <div class="tech-item"><span class="tech-label">الاسم بالإنجليزية:</span> <span class="tech-val" style="direction: ltr; text-align: right;">${d.englishName || 'لا يوجد'}</span></div>
               <div class="tech-item" style="grid-column: 1 / -1;"><span class="tech-label">البريد الإلكتروني:</span> <span class="tech-val" style="direction: ltr; text-align: right;">${d.email ? `<a href="mailto:${d.email}" style="color: var(--primary-color); text-decoration: underline;">${d.email}</a>` : 'لا يوجد'}</span></div>
             </div>

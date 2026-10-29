@@ -1335,7 +1335,7 @@ function renderComparisons() {
     if (!employeeData[name]) {
       employeeData[name] = { 
         name: name,
-        totalMonitors: 0, 
+        maxMonitors: 0,
         totalComputers: 0,
         desktopsCount: 0,
         laptopsCount: 0,
@@ -1356,9 +1356,12 @@ function renderComparisons() {
         employeeData[name].totalComputers += 1;
         employeeData[name].desktopsCount += 1;
       }
-    }
-    if (d.assetType === 'Monitor' || d.deviceNature === 'Monitor' || (parseInt(d.monitorsCount) || 0) > 0) {
-      employeeData[name].totalMonitors += (parseInt(d.monitorsCount) || 1);
+
+      // Check the monitors count specifically configured on this device (عدد الشاشات المرفقة)
+      const mc = parseInt(d.monitorsCount) || 1;
+      if (mc > employeeData[name].maxMonitors) {
+        employeeData[name].maxMonitors = mc;
+      }
     }
   });
 
@@ -1380,7 +1383,7 @@ function renderComparisons() {
   uniqueEmployees.forEach(emp => {
     if (emp.totalComputers >= 1) listHasComputer.push(emp.name);
     if (emp.totalComputers >= 2) listHasMultiple.push(emp.name);
-    if (emp.totalMonitors >= 2) listHasMonitor.push(emp.name);
+    if (emp.maxMonitors >= 2) listHasMonitor.push(emp.name);
     if (!emp.hasAnyRealDevice) listNoDevice.push(emp.name);
   });
 

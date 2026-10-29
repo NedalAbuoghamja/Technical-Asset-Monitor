@@ -4,20 +4,29 @@
     "username": "admin",
     "password": "fc38243a6affaeedb8a0bec9355bd7551a7ff03b439e165182b9f4a7206cd2da8ac115bbb3afbae902aac3bbb4880531e8b801d2f27071904be9dc297438c206",
     "role": "Admin",
-    "permissions": "{}"
+    "permissions": "{}",
+    "twoFactorSecret": "G5645UFDOY2RJ7BB2L7AZQ72KHTH2UNB",
+    "twoFactorEnabled": true,
+    "mustChangePassword": false
   },
   {
     "id": "6",
     "username": "mohammed.alzayani",
     "password": "92a72fe14ccdd69a8dbd39a2409a1efd3eda60e780c06b45c04405f3796d6030e8007a94f4402da8fbc1bebf8471e370c410768991085e07adfcf6dfce02c48f",
     "role": "Admin",
-    "permissions": "{\"canAdd\":true,\"canEdit\":true,\"canDelete\":true,\"canViewComparisons\":true,\"canViewStats\":true,\"canViewLogs\":true}"
+    "permissions": "{\"canAdd\":true,\"canEdit\":true,\"canDelete\":true,\"canViewComparisons\":true,\"canViewStats\":true,\"canViewLogs\":true}",
+    "twoFactorSecret": "",
+    "twoFactorEnabled": false,
+    "mustChangePassword": true
   },
   {
     "id": "7",
     "username": "Majdi.Alzarrouk",
     "password": "92a72fe14ccdd69a8dbd39a2409a1efd3eda60e780c06b45c04405f3796d6030e8007a94f4402da8fbc1bebf8471e370c410768991085e07adfcf6dfce02c48f",
     "role": "Admin",
-    "permissions": "{\"canAdd\":true,\"canEdit\":true,\"canDelete\":true,\"canViewComparisons\":true,\"canViewStats\":true,\"canViewLogs\":true}"
+    "permissions": "{\"canAdd\":true,\"canEdit\":true,\"canDelete\":true,\"canViewComparisons\":true,\"canViewStats\":true,\"canViewLogs\":true}",
+    "twoFactorSecret": "",
+    "twoFactorEnabled": false,
+    "mustChangePassword": true
   }
 ]

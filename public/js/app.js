@@ -1116,29 +1116,54 @@ function renderCharts() {
   const gridColor = isDark ? 'rgba(255, 255, 255, 0.04)' : 'rgba(15, 23, 42, 0.04)';
   const fontConfig = { family: "'Cairo', 'Outfit', sans-serif", weight: '700' };
   
-  // 1. Department Chart (Pie)
+  // 1. Department Chart (PolarArea / Doughnut with Distinct Rich Colors)
   if (deptChartInstance) deptChartInstance.destroy();
   
+  const realDevicesForChart = devices.filter(hasRealDevice);
   const deptsData = {};
-  devices.forEach(d => {
-    let chartDept = 'أخرى';
-    if (d.orgPath) {
-      const paths = d.orgPath.split('||');
+  realDevicesForChart.forEach(d => {
+    let chartDept = 'غير محدد';
+    if (d.orgPath && d.orgPath.trim()) {
+      const paths = d.orgPath.split('||').map(p => p.trim()).filter(Boolean);
       if (paths.length > 2 && paths[0] === 'مجلس الإدارة' && paths[1] === 'المدير العام') {
          chartDept = paths[2];
       } else if (paths.length > 1 && paths[0] === 'مجلس الإدارة' && paths[1] !== 'المدير العام') {
          chartDept = paths[1];
-      } else {
-         chartDept = paths[0] || d.department;
+      } else if (paths.length > 0) {
+         chartDept = paths[0];
       }
-    } else {
-      chartDept = d.department;
+    } else if (d.department && d.department.trim()) {
+      chartDept = d.department.trim();
     }
     deptsData[chartDept] = (deptsData[chartDept] || 0) + 1;
   });
   
-  const deptLabels = Object.keys(deptsData).map(translateLabel);
-  const deptValues = Object.values(deptsData);
+  // Sort descending by device count for clearer visualization
+  const sortedEntries = Object.entries(deptsData).sort((a, b) => b[1] - a[1]);
+  const deptLabels = sortedEntries.map(e => translateLabel(e[0]));
+  const deptValues = sortedEntries.map(e => e[1]);
+
+  // Distinct, high-contrast vibrant color palette (18 distinguishable colors)
+  const distinctColors = [
+    '#3b82f6', // Royal Blue
+    '#10b981', // Emerald Green
+    '#f59e0b', // Amber / Gold
+    '#ef4444', // Crimson Red
+    '#8b5cf6', // Violet / Purple
+    '#06b6d4', // Cyan
+    '#ec4899', // Hot Pink
+    '#f97316', // Orange
+    '#14b8a6', // Teal
+    '#6366f1', // Indigo
+    '#84cc16', // Lime Green
+    '#d946ef', // Fuchsia
+    '#0284c7', // Sky Blue
+    '#e11d48', // Rose
+    '#a855f7', // Lavender
+    '#eab308', // Yellow
+    '#64748b', // Slate Gray
+    '#475569'  // Dark Slate
+  ];
   
   const ctxDept = document.getElementById('deptChart').getContext('2d');
   deptChartInstance = new Chart(ctxDept, {
@@ -1147,18 +1172,21 @@ function renderCharts() {
       labels: deptLabels,
       datasets: [{
         data: deptValues,
-        backgroundColor: [
-          '#0077C8', '#F7941D', '#004A8F', '#1e9de8', '#e07b0e', '#0099E6', '#003570',
-          '#2bb5ff', '#ffa940', '#0060b0', '#f59e0b', '#003a7a', '#7bcfff'
-        ],
-        borderWidth: isDark ? 2 : 1,
-        borderColor: isDark ? '#0f172a' : '#fff'
+        backgroundColor: distinctColors.slice(0, deptValues.length),
+        borderWidth: isDark ? 2 : 2,
+        borderColor: isDark ? '#1e293b' : '#ffffff',
+        hoverOffset: 12,
+        spacing: 3,
+        borderRadius: 5
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      cutout: '65%',
+      cutout: '45%',
+      layout: {
+        padding: 10
+      },
       plugins: {
         legend: {
           position: 'bottom',
@@ -1166,63 +1194,87 @@ function renderCharts() {
           labels: {
             font: { family: "'Cairo', 'Outfit', sans-serif", size: 11, weight: '700' },
             color: textColor,
-            padding: 10,
+            padding: 12,
             usePointStyle: true,
-            pointStyle: 'circle'
+            pointStyle: 'rectRounded'
+          }
+        },
+        tooltip: {
+          rtl: true,
+          titleFont: { family: "'Cairo', sans-serif", size: 13 },
+          bodyFont: { family: "'Cairo', sans-serif", size: 12 },
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            label: function(context) {
+              const val = context.raw || 0;
+              const total = deptValues.reduce((a, b) => a + b, 0);
+              const pct = total > 0 ? ((val / total) * 100).toFixed(1) : 0;
+              return ` ${context.label}: ${val} جهاز (${pct}%)`;
+            }
           }
         }
       }
     }
   });
 
-  // 2. Status Chart (Bar)
+  // 2. Status Chart (Doughnut - دائري متناسق مع المخطط الأول)
   if (statusChartInstance) statusChartInstance.destroy();
   
   const realDevices = devices.filter(hasRealDevice);
   const cleanCount = realDevices.filter(d => (d.technicalStatus || 'سليم') === 'سليم').length;
   const issueCount = realDevices.filter(d => (d.technicalStatus || 'سليم') !== 'سليم').length;
+  const totalStatus = cleanCount + issueCount;
   
   const ctxStatus = document.getElementById('statusChart').getContext('2d');
   statusChartInstance = new Chart(ctxStatus, {
-    type: 'bar',
+    type: 'doughnut',
     data: {
       labels: [translateLabel('سليم'), translateLabel('به مشاكل تقنية')],
       datasets: [{
-        label: 'عدد الأجهزة',
         data: [cleanCount, issueCount],
         backgroundColor: [
-          'rgba(0, 119, 200, 0.22)', 
-          'rgba(244, 63, 94, 0.20)'
+          '#10b981', // أخضر زمردي جذاب وسلس للسليم
+          '#ef4444'  // أحمر قرمزي ناصع للمشاكل التقنية
         ],
-        borderColor: [
-          '#0077C8', 
-          '#f43f5e'
-        ],
-        borderWidth: 1.5,
-        borderRadius: 8,
-        borderSkipped: false
+        borderWidth: 2,
+        borderColor: isDark ? '#1e293b' : '#ffffff',
+        hoverOffset: 12,
+        spacing: 4,
+        borderRadius: 6
       }]
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-      plugins: {
-        legend: { display: false }
+      cutout: '45%',
+      layout: {
+        padding: 10
       },
-      scales: {
-        x: {
-          grid: { display: false },
-          ticks: {
-            font: { family: "'Cairo', 'Outfit', sans-serif", size: 12, weight: '700' },
-            color: textColor
-          }
-        },
-        y: {
-          grid: { color: gridColor },
-          ticks: {
+      plugins: {
+        legend: {
+          position: 'bottom',
+          rtl: true,
+          labels: {
             font: { family: "'Cairo', 'Outfit', sans-serif", size: 12, weight: '700' },
             color: textColor,
-            stepSize: 1
+            padding: 16,
+            usePointStyle: true,
+            pointStyle: 'rectRounded'
+          }
+        },
+        tooltip: {
+          rtl: true,
+          titleFont: { family: "'Cairo', sans-serif", size: 13 },
+          bodyFont: { family: "'Cairo', sans-serif", size: 12 },
+          padding: 10,
+          cornerRadius: 8,
+          callbacks: {
+            label: function(context) {
+              const val = context.raw || 0;
+              const pct = totalStatus > 0 ? ((val / totalStatus) * 100).toFixed(1) : 0;
+              return ` ${context.label}: ${val} جهاز (${pct}%)`;
+            }
           }
         }
       }
@@ -3664,3 +3716,94 @@ if (d_global) {
   d_global.addEventListener('input', generateDockingForms);
   d_global.addEventListener('change', generateDockingForms);
 }
+
+// ==========================================
+// 2FA SETUP (Microsoft Authenticator)
+// ==========================================
+let current2FASecret = '';
+
+async function openTwoFactorModal() {
+  openModal('twoFactorModal');
+  const activeView = document.getElementById('twoFactorActiveView');
+  const setupView = document.getElementById('twoFactorSetupView');
+  const badge = document.getElementById('twoFactorStatusBadge');
+
+  badge.innerHTML = '<span class="badge" style="background: rgba(99,102,241,0.15); color: #818cf8;">جاري التحقق من حالة الأمان...</span>';
+
+  try {
+    const res = await fetch('/api/auth/2fa/setup', { method: 'POST' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'فشل جلب إعدادات الأمان');
+
+    if (data.alreadyEnabled) {
+      activeView.style.display = 'block';
+      setupView.style.display = 'none';
+      badge.innerHTML = '<span class="badge" style="background: rgba(16,185,129,0.15); color: #10b981; font-weight: bold; font-size: 0.9rem; padding: 6px 12px;"><i class="bi bi-shield-check"></i> التحقق بخطوتين: مفعل</span>';
+    } else {
+      activeView.style.display = 'none';
+      setupView.style.display = 'block';
+      badge.innerHTML = '<span class="badge" style="background: rgba(239,68,68,0.15); color: #ef4444; font-weight: bold; font-size: 0.9rem; padding: 6px 12px;"><i class="bi bi-shield-exclamation"></i> التحقق بخطوتين: غير مفعل</span>';
+
+      current2FASecret = data.secret;
+      document.getElementById('twoFactorQrCode').src = data.qrCodeUrl;
+      document.getElementById('twoFactorSecretCode').textContent = data.secret;
+      document.getElementById('verify2FAToken').value = '';
+    }
+  } catch (err) {
+    showToast(err.message, true);
+  }
+}
+
+function init2FAHandlers() {
+  const btn = document.getElementById('open2FAModalBtn');
+  if (btn) btn.addEventListener('click', openTwoFactorModal);
+
+  const verifyForm = document.getElementById('verify2FAForm');
+  if (verifyForm) {
+    verifyForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const token = document.getElementById('verify2FAToken').value.trim();
+      if (token.length !== 6) return showToast('الرجاء إدخال رمز الـ 6 أرقام بالكامل', true);
+
+      const confirmBtn = document.getElementById('confirm2FABtn');
+      confirmBtn.disabled = true;
+
+      try {
+        const res = await fetch('/api/auth/2fa/enable', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ secret: current2FASecret, token })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل التفعيل');
+
+        showToast(data.message || 'تم تفعيل الحماية بنجاح!');
+        openTwoFactorModal(); // Refresh view
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        confirmBtn.disabled = false;
+      }
+    });
+  }
+
+  const disableBtn = document.getElementById('disable2FABtn');
+  if (disableBtn) {
+    disableBtn.addEventListener('click', async () => {
+      if (!confirm('هل أنت متأكد من رغبتك في إلغاء التحقق بخطوتين؟ سيقل مستوى أمان حسابك.')) return;
+      try {
+        const res = await fetch('/api/auth/2fa/disable', { method: 'POST' });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'فشل الإلغاء');
+
+        showToast('تم إلغاء تفعيل التحقق بخطوتين بنجاح');
+        openTwoFactorModal();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    });
+  }
+}
+
+// Call on init
+document.addEventListener('DOMContentLoaded', init2FAHandlers);

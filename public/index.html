@@ -178,6 +178,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <button id="openRecycleBinBtn" class="action-btn circle-btn" title="سلة المهملات" style="display: none;">
             <i class="bi bi-trash-fill"></i>
           </button>
+          <button id="open2FAModalBtn" class="action-btn circle-btn" title="أمان الحساب (التحقق بخطوتين OTP)" style="color: #3b82f6;">
+            <i class="bi bi-shield-lock-fill"></i>
+          </button>
           <button id="openUserManagementBtn" class="action-btn circle-btn admin-only-element" title="إدارة المستخدمين" data-i18n-title="user_management">
             <i class="bi bi-people-fill"></i>
           </button>
@@ -277,7 +280,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         </div>
         <div class="chart-container">
           <div class="chart-header">
-            <h3><i class="bi bi-bar-chart-line-fill"></i><span data-i18n="chart_status"> الأجهزة السليمة مقابل الأجهزة المعطلة</span></h3>
+            <h3><i class="bi bi-pie-chart"></i><span data-i18n="chart_status"> الأجهزة السليمة مقابل الأجهزة المعطلة</span></h3>
           </div>
           <div class="chart-body">
             <canvas id="statusChart"></canvas>
@@ -1081,6 +1084,65 @@ document.addEventListener('DOMContentLoaded', async () => {
     </div>
     <div id="notificationsList" class="notif-list">
       <div style="padding: 10px; text-align: center; color: var(--text-muted); font-size: 0.85rem;">جاري التحميل...</div>
+    </div>
+  </div>
+
+  <!-- 2FA Setup Modal (Microsoft Authenticator) -->
+  <div id="twoFactorModal" class="modal" style="display: none;">
+    <div class="modal-content" style="max-width: 480px; text-align: center;">
+      <div class="modal-header" style="justify-content: space-between;">
+        <h3 style="margin: 0; color: var(--clr-primary, #3b82f6); display: flex; align-items: center; gap: 8px;">
+          <i class="bi bi-shield-lock-fill"></i> التحقق بخطوتين (2FA)
+        </h3>
+        <button class="close-modal-btn" onclick="closeModal('twoFactorModal')">&times;</button>
+      </div>
+      <div class="modal-body" style="padding: 1.5rem 1rem;">
+        <div id="twoFactorStatusBadge" style="margin-bottom: 1rem;"></div>
+
+        <!-- 2FA Active View -->
+        <div id="twoFactorActiveView" style="display: none;">
+          <div style="background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.3); border-radius: 12px; padding: 1.25rem; margin-bottom: 1.25rem;">
+            <i class="bi bi-patch-check-fill" style="font-size: 2.5rem; color: #10b981;"></i>
+            <h4 style="margin: 0.5rem 0 0.25rem; color: #10b981;">حسابك محمي بالكامل</h4>
+            <p style="font-size: 0.85rem; color: var(--tx-muted); margin: 0;">التحقق بخطوتين مفعل عبر تطبيق Microsoft Authenticator على هاتفك.</p>
+          </div>
+          <button type="button" class="action-btn btn-danger" id="disable2FABtn" style="width: 100%; height: 42px;">
+            <i class="bi bi-shield-x"></i> إلغاء تفعيل التحقق بخطوتين
+          </button>
+        </div>
+
+        <!-- 2FA Setup View -->
+        <div id="twoFactorSetupView">
+          <p style="font-size: 0.9rem; color: var(--tx-muted); margin-bottom: 1rem;">
+            امسح الرمز التالي بكاميرا تطبيق <strong>Microsoft Authenticator</strong> أو <strong>Google Authenticator</strong>:
+          </p>
+
+          <div style="display: flex; justify-content: center; margin-bottom: 1rem;">
+            <div style="background: #fff; padding: 10px; border-radius: 12px; display: inline-block; box-shadow: 0 4px 15px rgba(0,0,0,0.1);">
+              <img id="twoFactorQrCode" src="" alt="QR Code" style="width: 180px; height: 180px; display: block;">
+            </div>
+          </div>
+
+          <div style="background: var(--bg-hover, rgba(255,255,255,0.05)); border-radius: 8px; padding: 8px 12px; margin-bottom: 1.25rem; font-size: 0.8rem; word-break: break-all;">
+            <span style="color: var(--tx-muted);">المفتاح اليدوي (إذا تعذر المسح): </span>
+            <code id="twoFactorSecretCode" style="color: #3b82f6; font-weight: bold; font-family: monospace;"></code>
+          </div>
+
+          <form id="verify2FAForm">
+            <div class="form-group" style="text-align: right; margin-bottom: 1rem;">
+              <label style="font-size: 0.85rem; font-weight: 700; display: block; margin-bottom: 6px;">أدخل الرمز المكون من 6 أرقام لتأكيد التفعيل:</label>
+              <input type="text" id="verify2FAToken" class="form-input" placeholder="000000" maxlength="6" inputmode="numeric" required style="text-align: center; font-size: 1.5rem; letter-spacing: 0.3rem; font-weight: 800; font-family: monospace;">
+            </div>
+            <button type="submit" class="action-btn btn-success" id="confirm2FABtn" style="width: 100%; height: 42px;">
+              <i class="bi bi-check-circle-fill"></i> تفعيل وحفظ الحماية
+            </button>
+          </form>
+        </div>
+
+      </div>
+      <div class="modal-footer" style="justify-content: center;">
+        <button type="button" class="action-btn btn-secondary" onclick="closeModal('twoFactorModal')">إغلاق</button>
+      </div>
     </div>
   </div>
 </body>

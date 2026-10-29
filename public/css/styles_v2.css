@@ -717,11 +717,12 @@ body.light-theme {
 .chart-header h3 i { color: var(--clr-primary-light); font-size: 1.1rem; }
 
 .chart-body {
-  min-height: 300px;
+  min-height: 400px;
   position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 0.5rem;
 }
 
 /* ─── INVENTORY SECTION ──────────────────────────────────── */

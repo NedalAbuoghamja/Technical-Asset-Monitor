@@ -84,6 +84,66 @@ function clearLoginAttempts(req) {
   loginAttempts.delete(`${ip}_${username}`);
 }
 
+// ==========================================
+// TOTP (Microsoft Authenticator / 2FA) HELPERS
+// Standard RFC 3548 / RFC 6238 Base32 & TOTP
+// ==========================================
+const BASE32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+
+function generateBase32Secret(byteLength = 20) {
+  const buffer = crypto.randomBytes(byteLength);
+  let bits = 0, value = 0, output = '';
+  for (let i = 0; i < buffer.length; i++) {
+    value = (value << 8) | buffer[i];
+    bits += 8;
+    while (bits >= 5) {
+      output += BASE32_ALPHABET[(value >>> (bits - 5)) & 31];
+      bits -= 5;
+    }
+  }
+  if (bits > 0) output += BASE32_ALPHABET[(value << (5 - bits)) & 31];
+  return output;
+}
+
+function base32Decode(base32) {
+  let bits = 0, value = 0;
+  const output = [];
+  for (let i = 0; i < base32.length; i++) {
+    const val = BASE32_ALPHABET.indexOf(base32[i].toUpperCase());
+    if (val === -1) continue;
+    value = (value << 5) | val;
+    bits += 5;
+    if (bits >= 8) {
+      output.push((value >>> (bits - 8)) & 255);
+      bits -= 8;
+    }
+  }
+  return Buffer.from(output);
+}
+
+function verifyTOTP(secret, token, windowSteps = 3) {
+  if (!secret || !token) return false;
+  const cleanToken = String(token).trim().replace(/\s+/g, '');
+  if (cleanToken.length !== 6) return false;
+
+  const key = base32Decode(secret);
+  const epoch = Math.floor(Date.now() / 1000);
+
+  // Check +/- windowSteps (e.g. +/- 90 seconds for phone time drift tolerance)
+  for (let windowOffset = -windowSteps; windowOffset <= windowSteps; windowOffset++) {
+    const counter = Math.floor(epoch / 30) + windowOffset;
+    const buf = Buffer.alloc(8);
+    buf.writeBigInt64BE(BigInt(counter), 0);
+    const hmac = crypto.createHmac('sha1', key).update(buf).digest();
+    const offset = hmac[hmac.length - 1] & 0x0f;
+    const code = ((hmac[offset] & 0x7f) << 24 | (hmac[offset + 1] & 0xff) << 16 | (hmac[offset + 2] & 0xff) << 8 | (hmac[offset + 3] & 0xff)) % 1000000;
+    if (String(code).padStart(6, '0') === cleanToken) {
+      return true;
+    }
+  }
+  return false;
+}
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // Multer storage for uploaded files
@@ -180,6 +240,12 @@ async function initDb() {
   } catch (err) {
     // Column likely exists
   }
+
+  // Ensure users table has 2FA and mustChangePassword columns
+  try { await dbRun(`ALTER TABLE users ADD COLUMN permissions TEXT DEFAULT '{}'`); } catch (err) {}
+  try { await dbRun(`ALTER TABLE users ADD COLUMN twoFactorSecret TEXT`); } catch (err) {}
+  try { await dbRun(`ALTER TABLE users ADD COLUMN twoFactorEnabled INTEGER DEFAULT 0`); } catch (err) {}
+  try { await dbRun(`ALTER TABLE users ADD COLUMN mustChangePassword INTEGER DEFAULT 1`); } catch (err) {}
 
   // Try to add connectionType to existing devices table if it doesn't exist
   try {
@@ -404,7 +470,7 @@ app.get('/api/events', (req, res) => {
 
 // Login Route
 app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
-  const { username, password } = req.body;
+  const { username, password, otpToken } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: 'اسم المستخدم وكلمة المرور مطلوبان' });
   }
@@ -423,6 +489,52 @@ app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
       return res.status(401).json({ error: 'اسم المستخدم أو كلمة المرور غير صحيحة' });
     }
 
+    // Check if the user requires mandatory onboarding (New Account / First login)
+    // Mandatory if mustChangePassword is true OR twoFactorEnabled is not yet activated
+    const requiresOnboarding = (user.mustChangePassword === 1 || user.mustChangePassword === true) || 
+                               (user.twoFactorEnabled !== 1 && user.twoFactorEnabled !== true);
+
+    if (requiresOnboarding) {
+      // Generate or retrieve RFC 3548 Base32 secret for Microsoft Authenticator
+      let secret = user.twoFactorSecret;
+      if (!secret || secret.length < 16) {
+        secret = generateBase32Secret(20);
+        await dbRun(`UPDATE users SET twoFactorSecret = ? WHERE id = ?`, [secret, user.id]);
+      }
+
+      const issuer = 'LITC-AssetMonitor';
+      const otpAuthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(user.username)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+      const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(otpAuthUrl)}`;
+
+      return res.json({
+        requiresOnboarding: true,
+        username: user.username,
+        secret,
+        qrCodeUrl,
+        otpAuthUrl,
+        mustChangePassword: !!user.mustChangePassword,
+        requires2FA: user.twoFactorEnabled !== 1,
+        message: 'إعداد إلزامي: يجب ربط حسابك بتطبيق Microsoft Authenticator وتغيير كلمة المرور للمتابعة'
+      });
+    }
+
+    // Check if 2FA (TOTP) is enabled for returning user
+    if (user.twoFactorEnabled === 1 && user.twoFactorSecret) {
+      if (!otpToken) {
+        return res.json({
+          requires2FA: true,
+          username: user.username,
+          message: 'رمز المصادقة (OTP) مطلوب للمتابعة'
+        });
+      }
+
+      const isValidOTP = verifyTOTP(user.twoFactorSecret, otpToken);
+      if (!isValidOTP) {
+        recordFailedLogin(req);
+        return res.status(401).json({ error: 'رمز التحقق (OTP) غير صحيح أو منتهي الصلاحية' });
+      }
+    }
+
     clearLoginAttempts(req);
     const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '24h' });
     res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 24 * 60 * 60 * 1000 });
@@ -430,6 +542,142 @@ app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
   } catch (error) {
     console.error("Login error:", error);
     res.status(500).json({ error: 'حدث خطأ أثناء تسجيل الدخول' });
+  }
+});
+
+// Complete first-time Onboarding (Mandatory 2FA + Password Change)
+app.post('/api/auth/onboarding/complete', checkLoginRateLimit, async (req, res) => {
+  const { username, currentPassword, newPassword, confirmPassword, otpToken, secret } = req.body;
+  if (!username || !currentPassword || !newPassword || !confirmPassword || !otpToken) {
+    return res.status(400).json({ error: 'جميع الحقول مطلوبة لإتمام التفعيل' });
+  }
+
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ error: 'كلمتا المرور الجديدة غير متطابقتين' });
+  }
+
+  if (newPassword.length < 8) {
+    return res.status(400).json({ error: 'يجب ألا تقل كلمة المرور الجديدة عن 8 أحرف أو أرقام' });
+  }
+
+  if (newPassword === currentPassword) {
+    return res.status(400).json({ error: 'يجب اختيار كلمة مرور جديدة تختلف عن كلمة المرور الحالية' });
+  }
+
+  try {
+    const cleanUser = username.trim().toLowerCase();
+    const user = await dbGet(`SELECT * FROM users WHERE LOWER(username) = ?`, [cleanUser]);
+    if (!user) {
+      return res.status(401).json({ error: 'المستخدم غير موجود' });
+    }
+
+    const hashedCurrent = hashPassword(currentPassword);
+    if (user.password !== hashedCurrent) {
+      recordFailedLogin(req);
+      return res.status(401).json({ error: 'كلمة المرور الحالية غير صحيحة' });
+    }
+
+    // Verify OTP using the secret provided or stored in user
+    const secretToVerify = secret || user.twoFactorSecret;
+    if (!secretToVerify) {
+      return res.status(400).json({ error: 'لم يتم العثور على مفتاح المصادقة، يرجى إعادة المحاولة' });
+    }
+
+    const isValidOTP = verifyTOTP(secretToVerify, otpToken, 3);
+    if (!isValidOTP) {
+      return res.status(400).json({ error: 'رمز التحقق (OTP) غير صحيح، تأكد من كتابة الرمز الحالي من تطبيق Microsoft Authenticator' });
+    }
+
+    // Update user: set new password, save secret, mark 2FA active, mark password changed
+    const hashedNew = hashPassword(newPassword);
+    await dbRun(`UPDATE users SET password = ?, twoFactorSecret = ?, twoFactorEnabled = 1, mustChangePassword = 0 WHERE id = ?`, [
+      hashedNew,
+      secretToVerify,
+      user.id
+    ]);
+
+    clearLoginAttempts(req);
+
+    // Issue session token
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '24h' });
+    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 24 * 60 * 60 * 1000 });
+
+    res.json({
+      success: true,
+      message: 'تم تفعيل الحماية وتعيين كلمة المرور بنجاح!',
+      user: { username: user.username, role: user.role, permissions: user.permissions }
+    });
+  } catch (error) {
+    console.error("Onboarding complete error:", error);
+    res.status(500).json({ error: 'حدث خطأ أثناء إتمام التفعيل: ' + error.message });
+  }
+});
+
+// ==========================================
+// 2FA SETUP & VERIFICATION APIs
+// ==========================================
+
+// Generate 2FA Secret & QR URL
+app.post('/api/auth/2fa/setup', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbGet(`SELECT id, username, twoFactorEnabled FROM users WHERE id = ?`, [req.user.id]);
+    if (!user) return res.status(404).json({ error: 'المستخدم غير موجود' });
+
+    const secret = generateBase32Secret(20);
+    // Standard otpauth URL compatible with Microsoft Authenticator and Google Authenticator
+    const issuer = 'LITC-AssetMonitor';
+    const otpAuthUrl = `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(user.username)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+    const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(otpAuthUrl)}`;
+
+    res.json({
+      success: true,
+      secret,
+      qrCodeUrl,
+      otpAuthUrl,
+      alreadyEnabled: user.twoFactorEnabled === 1
+    });
+  } catch (err) {
+    res.status(500).json({ error: 'فشل في إعداد التحقق بخطوتين: ' + err.message });
+  }
+});
+
+// Verify and enable 2FA
+app.post('/api/auth/2fa/enable', authenticateToken, async (req, res) => {
+  const { secret, token } = req.body;
+  if (!secret || !token) {
+    return res.status(400).json({ error: 'المفتاح ورمز التحقق مطلوبان' });
+  }
+
+  const isValid = verifyTOTP(secret, token);
+  if (!isValid) {
+    return res.status(400).json({ error: 'رمز التحقق غير صحيح، تأكد من كتابة الرمز الظاهر في Microsoft Authenticator' });
+  }
+
+  try {
+    await dbRun(`UPDATE users SET twoFactorSecret = ?, twoFactorEnabled = 1 WHERE id = ?`, [secret, req.user.id]);
+    res.json({ success: true, message: 'تم تفعيل التحقق بخطوتين عبر Microsoft Authenticator بنجاح!' });
+  } catch (err) {
+    res.status(500).json({ error: 'فشل حفظ إعدادات التحقق بخطوتين: ' + err.message });
+  }
+});
+
+// Disable 2FA
+app.post('/api/auth/2fa/disable', authenticateToken, async (req, res) => {
+  try {
+    await dbRun(`UPDATE users SET twoFactorSecret = '', twoFactorEnabled = 0 WHERE id = ?`, [req.user.id]);
+    res.json({ success: true, message: 'تم إلغاء تفعيل التحقق بخطوتين' });
+  } catch (err) {
+    res.status(500).json({ error: 'فشل إلغاء التحقق بخطوتين' });
+  }
+});
+
+// Check 2FA Status for current user
+app.get('/api/auth/2fa/status', authenticateToken, async (req, res) => {
+  try {
+    const user = await dbGet(`SELECT twoFactorEnabled FROM users WHERE id = ?`, [req.user.id]);
+    res.json({ enabled: user ? user.twoFactorEnabled === 1 : false });
+  } catch (err) {
+    res.json({ enabled: false });
   }
 });
 
@@ -475,14 +723,21 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
   }
 
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'يجب ألا تقل كلمة المرور عن 8 أحرف أو أرقام' });
+  }
+
   if (role !== 'Admin' && role !== 'User') {
     return res.status(400).json({ error: 'الدور غير صالح' });
   }
 
   try {
     const hashed = hashPassword(password);
-    await dbRun(`INSERT INTO users (username, password, role, permissions) VALUES (?, ?, ?, ?)`, [username.trim(), hashed, role, JSON.stringify(permissions || {})]);
-    res.status(201).json({ success: true, message: 'تم إضافة المستخدم بنجاح' });
+    await dbRun(
+      `INSERT INTO users (username, password, role, permissions, mustChangePassword, twoFactorEnabled, twoFactorSecret) VALUES (?, ?, ?, ?, 1, 0, '')`,
+      [username.trim(), hashed, role, JSON.stringify(permissions || {})]
+    );
+    res.status(201).json({ success: true, message: 'تم إضافة المستخدم بنجاح وسيُطلب منه إعداد الحماية وتغيير كلمة المرور عند أول تسجيل دخول' });
   } catch (error) {
     if (error.message.includes('UNIQUE constraint failed')) {
       return res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });

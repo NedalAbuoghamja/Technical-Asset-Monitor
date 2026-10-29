@@ -101,28 +101,31 @@ async function syncAllToCloud() {
           username: u.username,
           password: u.password,
           role: u.role,
-          permissions: u.permissions || '{}'
+          permissions: u.permissions || '{}',
+          twoFactorSecret: u.twoFactorSecret || '',
+          twoFactorEnabled: u.twoFactorEnabled === 1 || u.twoFactorEnabled === true,
+          mustChangePassword: u.mustChangePassword === 1 || u.mustChangePassword === true
         }));
         fs.writeFileSync(usersCachePath, JSON.stringify(formattedUsers, null, 2), 'utf8');
         console.log(`Updated users cache at ${usersCachePath}`);
 
         for (const u of userRows) {
           const snapshot = await firestore.collection('users').where('username', '==', u.username).get();
+          const userData = {
+            username: u.username,
+            password: u.password,
+            role: u.role,
+            permissions: u.permissions || '{}',
+            twoFactorSecret: u.twoFactorSecret || '',
+            twoFactorEnabled: u.twoFactorEnabled === 1 || u.twoFactorEnabled === true,
+            mustChangePassword: u.mustChangePassword === 1 || u.mustChangePassword === true
+          };
           if (snapshot.empty) {
-            await firestore.collection('users').add({
-              username: u.username,
-              password: u.password,
-              role: u.role,
-              permissions: u.permissions || '{}'
-            });
+            await firestore.collection('users').add(userData);
             console.log(`Added user ${u.username} to Firestore`);
           } else {
             const userDoc = snapshot.docs[0];
-            await userDoc.ref.update({
-              password: u.password,
-              role: u.role,
-              permissions: u.permissions || '{}'
-            });
+            await userDoc.ref.update(userData);
             console.log(`Updated user ${u.username} in Firestore`);
           }
         }

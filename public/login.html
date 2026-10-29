@@ -62,9 +62,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      overflow: hidden;
+      overflow-y: auto;
       position: relative;
       -webkit-font-smoothing: antialiased;
+      padding: 2rem 1rem;
     }
 
     /* ── Animated Mesh Background ── */
@@ -522,33 +523,112 @@
         </button>
       </form>
 
-      <!-- Force Password Change Form -->
-      <form id="forcePasswordForm" class="login-form" style="display: none;" novalidate>
-        <div style="text-align: center; margin-bottom: 0.5rem;">
-          <p style="font-size: 0.9rem; color: var(--clr-danger-lt); font-weight: bold;">أنت تستخدم كلمة مرور مؤقتة!</p>
-          <p style="font-size: 0.8rem; color: var(--tx-muted);">الرجاء تعيين كلمة مرور جديدة خاصة بك للمتابعة.</p>
-        </div>
-        <div class="form-group">
-          <label class="form-label" for="newPassword">كلمة المرور الجديدة</label>
-          <div class="input-group">
-            <input type="password" id="newPassword" class="form-input" placeholder="أدخل كلمة المرور الجديدة" required>
-            <span class="input-icon"><i class="bi bi-key-fill"></i></span>
+      <!-- 2FA OTP Form (Microsoft Authenticator) -->
+      <form id="otpForm" class="login-form" style="display: none;" novalidate>
+        <div style="text-align: center; margin-bottom: 0.75rem;">
+          <div style="width: 50px; height: 50px; background: rgba(59,130,246,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.75rem; color: #3b82f6; font-size: 1.5rem;">
+            <i class="bi bi-shield-check"></i>
           </div>
+          <h3 style="font-size: 1.15rem; font-weight: 800; margin-bottom: 0.25rem;">التحقق بخطوتين (2FA)</h3>
+          <p style="font-size: 0.85rem; color: var(--tx-muted);">أدخل رمز الـ 6 أرقام الظاهر في تطبيق <strong style="color: var(--tx-main);">Microsoft Authenticator</strong> على هاتفك</p>
         </div>
+
         <div class="form-group">
-          <label class="form-label" for="confirmNewPassword">تأكيد كلمة المرور</label>
           <div class="input-group">
-            <input type="password" id="confirmNewPassword" class="form-input" placeholder="أعد إدخال كلمة المرور" required>
-            <span class="input-icon"><i class="bi bi-key-fill"></i></span>
+            <input type="text" id="otpInput" class="form-input" placeholder="000000" required maxlength="6" inputmode="numeric" autocomplete="one-time-code" style="text-align: center; font-size: 1.6rem; letter-spacing: 0.4rem; font-weight: 800; font-family: monospace;">
+            <span class="input-icon"><i class="bi bi-phone"></i></span>
           </div>
         </div>
 
-        <button type="submit" class="login-btn" id="forcePasswordBtn">
+        <button type="submit" class="login-btn" id="otpBtn">
           <span class="btn-text-icon">
-            <i class="bi bi-check-circle-fill"></i>
-            <span>تأكيد وتسجيل الدخول</span>
+            <i class="bi bi-shield-lock-fill"></i>
+            <span>تأكيد الرمز والدخول</span>
           </span>
           <div class="btn-spinner"></div>
+        </button>
+
+        <button type="button" class="action-btn btn-secondary" id="backToLoginBtn" style="margin-top: 0.75rem; width: 100%; height: 42px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--tx-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+          <i class="bi bi-arrow-right"></i> الرجوع لتسجيل الدخول
+        </button>
+      </form>
+
+      <!-- Mandatory First-Time Onboarding Form (Microsoft Authenticator 2FA + Password Change) -->
+      <form id="onboardingForm" class="login-form" style="display: none;" novalidate>
+        <div style="text-align: center; margin-bottom: 0.85rem;">
+          <div style="width: 52px; height: 52px; background: rgba(99,102,241,0.15); border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 0.6rem; color: #818cf8; font-size: 1.5rem; border: 1px solid rgba(99,102,241,0.3);">
+            <i class="bi bi-shield-lock-fill"></i>
+          </div>
+          <h2 style="font-size: 1.15rem; font-weight: 800; margin-bottom: 0.25rem; color: var(--tx-main);">إعداد الحماية لأول مرة</h2>
+          <p style="font-size: 0.82rem; color: var(--tx-muted); line-height: 1.5;">كإجراء أمني إلزامي، يجب ربط حسابك بتطبيق <strong style="color: var(--tx-main);">Microsoft Authenticator</strong> وتعيين كلمة مرور جديدة خاصة بك قبل الدخول.</p>
+        </div>
+
+        <!-- Step 1: Microsoft Authenticator QR & Secret -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.9rem; margin-bottom: 0.85rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+            <span style="width: 22px; height: 22px; border-radius: 50%; background: #6366f1; color: #fff; font-size: 0.75rem; font-weight: bold; display: flex; align-items: center; justify-content: center;">1</span>
+            <span style="font-weight: 700; font-size: 0.88rem; color: var(--tx-main);">امسح الباركود بتطبيق Microsoft Authenticator</span>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 0.6rem;">
+            <div style="display: inline-block; padding: 6px; background: #ffffff; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+              <img id="onboardQrImage" src="" alt="Authenticator QR Code" style="width: 160px; height: 160px; display: block; border-radius: 8px;">
+            </div>
+          </div>
+
+          <div style="margin-bottom: 0.6rem;">
+            <label style="font-size: 0.73rem; color: var(--tx-muted); display: block; margin-bottom: 0.25rem;">أو أدخل المفتاح يدوياً في التطبيق:</label>
+            <div style="display: flex; gap: 0.4rem;">
+              <input type="text" id="onboardSecretInput" readonly style="font-family: monospace; font-size: 0.78rem; letter-spacing: 0.06rem; background: rgba(0,0,0,0.4); border: 1px solid var(--border); color: #818cf8; border-radius: 8px; padding: 0.35rem 0.5rem; width: 100%; text-align: center;" value="">
+              <button type="button" id="copyOnboardSecretBtn" style="background: rgba(99,102,241,0.2); border: 1px solid rgba(99,102,241,0.4); color: #eef1ff; border-radius: 8px; padding: 0 0.65rem; font-size: 0.73rem; cursor: pointer; white-space: nowrap; font-family: inherit; font-weight: 600;">
+                <i class="bi bi-clipboard"></i> نسخ
+              </button>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="onboardOtpToken" style="font-size: 0.78rem;">أدخل رمز التحقق (OTP) الظاهر في التطبيق:</label>
+            <div class="input-group">
+              <input type="text" id="onboardOtpToken" class="form-input" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" required style="text-align: center; font-size: 1.4rem; letter-spacing: 0.35rem; font-weight: 800; font-family: monospace;">
+              <span class="input-icon"><i class="bi bi-phone"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Step 2: New Password -->
+        <div style="background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: var(--r-md); padding: 0.9rem; margin-bottom: 1rem;">
+          <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.6rem;">
+            <span style="width: 22px; height: 22px; border-radius: 50%; background: #10b981; color: #fff; font-size: 0.75rem; font-weight: bold; display: flex; align-items: center; justify-content: center;">2</span>
+            <span style="font-weight: 700; font-size: 0.88rem; color: var(--tx-main);">تعيين كلمة المرور الجديدة</span>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0.6rem;">
+            <label class="form-label" for="onboardNewPassword" style="font-size: 0.78rem;">كلمة المرور الجديدة (8 خانات على الأقل)</label>
+            <div class="input-group">
+              <input type="password" id="onboardNewPassword" class="form-input" placeholder="أدخل كلمة مرور جديدة قوية" required autocomplete="new-password">
+              <span class="input-icon"><i class="bi bi-lock-fill"></i></span>
+            </div>
+          </div>
+
+          <div class="form-group" style="margin-bottom: 0;">
+            <label class="form-label" for="onboardConfirmPassword" style="font-size: 0.78rem;">تأكيد كلمة المرور الجديدة</label>
+            <div class="input-group">
+              <input type="password" id="onboardConfirmPassword" class="form-input" placeholder="أعد إدخال كلمة المرور للتأكيد" required autocomplete="new-password">
+              <span class="input-icon"><i class="bi bi-shield-check"></i></span>
+            </div>
+          </div>
+        </div>
+
+        <button type="submit" class="login-btn" id="onboardSubmitBtn">
+          <span class="btn-text-icon">
+            <i class="bi bi-shield-fill-check"></i>
+            <span>تفعيل الحساب وتسجيل الدخول</span>
+          </span>
+          <div class="btn-spinner"></div>
+        </button>
+
+        <button type="button" class="action-btn btn-secondary" id="onboardBackBtn" style="margin-top: 0.65rem; width: 100%; height: 40px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid var(--border); color: var(--tx-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer;">
+          <i class="bi bi-arrow-right"></i> الرجوع لتسجيل الدخول
         </button>
       </form>
 
@@ -571,18 +651,55 @@
     let tempPassword = '';
 
     const form = document.getElementById('loginForm');
-    const forceForm = document.getElementById('forcePasswordForm');
+    const otpForm = document.getElementById('otpForm');
+    const onboardForm = document.getElementById('onboardingForm');
     const alertBox = document.getElementById('alertBox');
     const alertMsg = document.getElementById('alertMessage');
     const loginBtn = document.getElementById('loginBtn');
-    const forceBtn = document.getElementById('forcePasswordBtn');
+    const otpBtn = document.getElementById('otpBtn');
+    const onboardSubmitBtn = document.getElementById('onboardSubmitBtn');
+    const backBtn = document.getElementById('backToLoginBtn');
+    const onboardBackBtn = document.getElementById('onboardBackBtn');
+    const copySecretBtn = document.getElementById('copyOnboardSecretBtn');
 
+    // Copy secret handler
+    if (copySecretBtn) {
+      copySecretBtn.addEventListener('click', () => {
+        const secretVal = document.getElementById('onboardSecretInput').value;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(secretVal).then(() => {
+            copySecretBtn.innerHTML = '<i class="bi bi-check2"></i> تم النسخ';
+            setTimeout(() => { copySecretBtn.innerHTML = '<i class="bi bi-clipboard"></i> نسخ'; }, 2000);
+          });
+        }
+      });
+    }
+
+    // Back to Login buttons
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        otpForm.style.display = 'none';
+        onboardForm.style.display = 'none';
+        form.style.display = 'flex';
+        alertBox.style.display = 'none';
+      });
+    }
+
+    if (onboardBackBtn) {
+      onboardBackBtn.addEventListener('click', () => {
+        onboardForm.style.display = 'none';
+        otpForm.style.display = 'none';
+        form.style.display = 'flex';
+        alertBox.style.display = 'none';
+      });
+    }
+
+    // Step 1: Initial Login Form submission
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const username = document.getElementById('username').value.trim();
       const password = document.getElementById('password').value;
 
-      // Reset & loading state
       alertBox.className = 'login-alert';
       alertBox.style.display = 'none';
       loginBtn.classList.add('loading');
@@ -595,12 +712,29 @@
         });
         const result = await res.json();
 
-        if (res.ok && result.requirePasswordChange) {
+        if (res.ok && result.requiresOnboarding) {
           tempUsername = username;
           tempPassword = password;
           loginBtn.classList.remove('loading');
           form.style.display = 'none';
-          forceForm.style.display = 'flex';
+          otpForm.style.display = 'none';
+
+          document.getElementById('onboardQrImage').src = result.qrCodeUrl;
+          document.getElementById('onboardSecretInput').value = result.secret || '';
+          document.getElementById('onboardOtpToken').value = '';
+          document.getElementById('onboardNewPassword').value = '';
+          document.getElementById('onboardConfirmPassword').value = '';
+
+          onboardForm.style.display = 'flex';
+          setTimeout(() => document.getElementById('onboardOtpToken').focus(), 150);
+        } else if (res.ok && result.requires2FA) {
+          tempUsername = username;
+          tempPassword = password;
+          loginBtn.classList.remove('loading');
+          form.style.display = 'none';
+          onboardForm.style.display = 'none';
+          otpForm.style.display = 'flex';
+          setTimeout(() => document.getElementById('otpInput').focus(), 100);
         } else if (res.ok && result.success) {
           alertBox.style.display = 'flex';
           alertBox.className = 'login-alert alert-success';
@@ -620,53 +754,123 @@
       }
     });
 
-    forceForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const newPassword = document.getElementById('newPassword').value;
-      const confirmNewPassword = document.getElementById('confirmNewPassword').value;
-
-      if (newPassword !== confirmNewPassword) {
-        alertBox.style.display = 'flex';
-        alertBox.className = 'login-alert alert-danger';
-        alertMsg.textContent = 'كلمتا المرور غير متطابقتين!';
-        return;
-      }
-      if (newPassword.length < 6) {
-        alertBox.style.display = 'flex';
-        alertBox.className = 'login-alert alert-danger';
-        alertMsg.textContent = 'يجب أن لا تقل كلمة المرور عن 6 أحرف.';
-        return;
-      }
-
-      alertBox.style.display = 'none';
-      forceBtn.classList.add('loading');
-
-      try {
-        const res = await fetch('/api/auth/force-change-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username: tempUsername, oldPassword: tempPassword, newPassword })
-        });
-        const result = await res.json();
-
-        if (res.ok && result.success) {
-          alertBox.style.display = 'flex';
-          alertBox.className = 'login-alert alert-success';
-          alertMsg.textContent = 'تم تعيين كلمة المرور بنجاح! جاري التوجيه...';
-          setTimeout(() => window.location.href = '/' + window.location.search, 700);
-        } else {
-          forceBtn.classList.remove('loading');
+    // 2FA OTP submission for returning users
+    if (otpForm) {
+      otpForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const otpToken = document.getElementById('otpInput').value.trim();
+        if (otpToken.length !== 6) {
           alertBox.style.display = 'flex';
           alertBox.className = 'login-alert alert-danger';
-          alertMsg.textContent = result.error || 'فشل التغيير. حاول مجدداً.';
+          alertMsg.textContent = 'الرجاء إدخال رمز التحقق المكون من 6 أرقام بالكامل';
+          return;
         }
-      } catch {
-        forceBtn.classList.remove('loading');
-        alertBox.style.display = 'flex';
-        alertBox.className = 'login-alert alert-danger';
-        alertMsg.textContent = 'تعذر الاتصال بالخادم. حاول مجدداً.';
-      }
-    });
+
+        alertBox.style.display = 'none';
+        otpBtn.classList.add('loading');
+
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: tempUsername, password: tempPassword, otpToken })
+          });
+          const result = await res.json();
+
+          if (res.ok && result.success) {
+            alertBox.style.display = 'flex';
+            alertBox.className = 'login-alert alert-success';
+            alertMsg.textContent = 'تم التحقق بنجاح! جاري التوجيه...';
+            setTimeout(() => window.location.href = '/' + window.location.search, 700);
+          } else {
+            otpBtn.classList.remove('loading');
+            alertBox.style.display = 'flex';
+            alertBox.className = 'login-alert alert-danger';
+            alertMsg.textContent = result.error || 'رمز التحقق غير صحيح، حاول مجدداً';
+          }
+        } catch {
+          otpBtn.classList.remove('loading');
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'تعذر الاتصال بالخادم';
+        }
+      });
+    }
+
+    // Onboarding Form submission (First-Time 2FA + Password Setup)
+    if (onboardForm) {
+      onboardForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const otpToken = document.getElementById('onboardOtpToken').value.trim();
+        const newPassword = document.getElementById('onboardNewPassword').value;
+        const confirmPassword = document.getElementById('onboardConfirmPassword').value;
+        const secret = document.getElementById('onboardSecretInput').value;
+
+        if (otpToken.length !== 6) {
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'الرجاء إدخال رمز التحقق (OTP) المكون من 6 أرقام من Microsoft Authenticator';
+          return;
+        }
+
+        if (newPassword.length < 8) {
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'يجب ألا تقل كلمة المرور الجديدة عن 8 خانات';
+          return;
+        }
+
+        if (newPassword !== confirmPassword) {
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'كلمتا المرور غير متطابقتين!';
+          return;
+        }
+
+        if (newPassword === tempPassword) {
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'يجب اختيار كلمة مرور جديدة تختلف عن كلمة المرور المؤقتة';
+          return;
+        }
+
+        alertBox.style.display = 'none';
+        onboardSubmitBtn.classList.add('loading');
+
+        try {
+          const res = await fetch('/api/auth/onboarding/complete', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: tempUsername,
+              currentPassword: tempPassword,
+              newPassword,
+              confirmPassword,
+              otpToken,
+              secret
+            })
+          });
+          const result = await res.json();
+
+          if (res.ok && result.success) {
+            alertBox.style.display = 'flex';
+            alertBox.className = 'login-alert alert-success';
+            alertMsg.textContent = 'تم إعداد الحماية وتعيين كلمة المرور بنجاح! جاري التوجيه...';
+            setTimeout(() => window.location.href = '/' + window.location.search, 800);
+          } else {
+            onboardSubmitBtn.classList.remove('loading');
+            alertBox.style.display = 'flex';
+            alertBox.className = 'login-alert alert-danger';
+            alertMsg.textContent = result.error || 'تعذر إتمام الإعداد، تحقق من رمز OTP وحاول مجدداً';
+          }
+        } catch {
+          onboardSubmitBtn.classList.remove('loading');
+          alertBox.style.display = 'flex';
+          alertBox.className = 'login-alert alert-danger';
+          alertMsg.textContent = 'تعذر الاتصال بالخادم. حاول مجدداً.';
+        }
+      });
+    }
   </script>
 </body>
 </html>

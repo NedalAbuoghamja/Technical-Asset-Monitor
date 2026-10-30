@@ -810,6 +810,77 @@ app.delete('/api/admin/users/:id', requireAdmin, async (req, res) => {
   }
 });
 
+// System network info for dynamic local QR codes
+app.get('/api/system/info', (req, res) => {
+  res.json({
+    localIp: '172.16.75.127',
+    port: PORT,
+    localUrl: `http://172.16.75.127:${PORT}`
+  });
+});
+
+// Public Standalone Technical Card Endpoint (No login required for QR scanning)
+app.get('/api/public/card/:id', async (req, res) => {
+  try {
+    const rawId = String(req.params.id).trim();
+    let device = null;
+
+    if (db) {
+      try {
+        const doc = await db.collection('devices').doc(rawId).get();
+        if (doc.exists && !doc.data().isDeleted) {
+          device = { id: doc.id, ...doc.data() };
+        } else {
+          // Try search by serviceTag (exact or uppercase)
+          let snap = await db.collection('devices').where('serviceTag', '==', rawId).limit(1).get();
+          if (snap.empty && rawId !== rawId.toUpperCase()) {
+            snap = await db.collection('devices').where('serviceTag', '==', rawId.toUpperCase()).limit(1).get();
+          }
+          if (snap.empty) {
+            snap = await db.collection('devices').where('employeeId', '==', rawId).limit(1).get();
+          }
+          if (!snap.empty && !snap.docs[0].data().isDeleted) {
+            device = { id: snap.docs[0].id, ...snap.docs[0].data() };
+          }
+        }
+      } catch (e) {
+        console.warn('Firestore card fetch failed, falling back to cache:', e.message);
+      }
+    }
+
+    if (!device) {
+      const localDevices = loadLocalDevicesCache();
+      device = localDevices.find(d => String(d.id) === rawId || String(d.serviceTag || '').toUpperCase() === rawId.toUpperCase());
+    }
+
+    if (!device) {
+      return res.status(404).json({ error: 'لم يتم العثور على بطاقة هذا الجهاز' });
+    }
+
+    if (device.customFields && typeof device.customFields === 'string') {
+      try { device.customFields = JSON.parse(device.customFields); } catch(e) { device.customFields = []; }
+    } else if (!device.customFields) {
+      device.customFields = [];
+    }
+
+    let columns = [];
+    if (db) {
+      try {
+        const colSnap = await db.collection('columns').get();
+        columns = colSnap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      } catch(e) {}
+    }
+    if (columns.length === 0) {
+      columns = loadLocalColumnsCache();
+    }
+
+    res.json({ success: true, device, columns });
+  } catch (err) {
+    console.error("Public card fetch error:", err);
+    res.status(500).json({ error: 'فشل في جلب بيانات بطاقة الجهاز: ' + err.message });
+  }
+});
+
 // ==========================================
 // CUSTODY / DEVICES APIs
 // ==========================================

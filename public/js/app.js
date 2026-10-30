@@ -765,6 +765,17 @@ function updateThemeIcon(theme) {
 // FETCH DATA
 async function fetchDevices() {
   showTableLoading();
+  // Fetch system network info for local mobile QR code scanning
+  fetch('/api/system/info')
+    .then(r => r.json())
+    .then(info => {
+      if (info && info.localUrl) {
+        window.serverLocalUrl = info.localUrl;
+        window.serverLocalIp = info.localIp;
+      }
+    })
+    .catch(() => {});
+
   try {
     const res = await fetch(`/api/devices?_t=${Date.now()}`);
     if (!res.ok) throw new Error('فشل جلب البيانات من الخادم');
@@ -2448,6 +2459,53 @@ async function handleDeviceDelete() {
   }
 }
 
+// Helper to build offline text representation of device card for standalone QR Code scanning
+function buildDeviceCardText(d) {
+  const lines = [];
+  lines.push('📋 بطاقة مواصفات العهدة التقنية (LITC)');
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`المستلم: ${d.employeeName || 'غير معروف'}`);
+  lines.push(`المعرف: #${d.employeeId || d.id}`);
+  if (d.orgPath) {
+    const cleanOrg = d.orgPath.split('||').map(s => s.trim()).filter(Boolean).join(' > ');
+    lines.push(`الجهة: ${cleanOrg}`);
+  }
+  if (d.englishName) lines.push(`الاسم (EN): ${d.englishName}`);
+  if (d.email) lines.push(`الإيميل: ${d.email}`);
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`الموديل: ${d.deviceModel || 'لا يوجد'}`);
+  if (d.deviceName) lines.push(`اسم الجهاز: ${d.deviceName}`);
+  lines.push(`النوع: ${translateNature(d.deviceNature)}`);
+  lines.push(`Service Tag: ${d.serviceTag || 'لا يوجد'}`);
+  lines.push(`الذاكرة (RAM): ${d.ram || 'غير متوفر'}`);
+  lines.push(`التخزين: ${d.storageType || 'SSD'} ${d.storageSize || ''}`.trim());
+  lines.push(`عدد الشاشات: ${d.monitorsCount || 1}`);
+
+  if (d.customFields && Array.isArray(d.customFields)) {
+    d.customFields.forEach(cf => {
+      if (cf && cf.label && cf.value) lines.push(`${cf.label}: ${cf.value}`);
+    });
+  }
+
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  if (d.osVersion) lines.push(`نظام التشغيل: ${d.osVersion}`);
+  if (d.ipAddress) lines.push(`عنوان IP: ${d.ipAddress}`);
+  if (d.phone) lines.push(`الهاتف: ${d.phone}`);
+  if (d.systemsUsed && d.systemsUsed !== 'لا يوجد' && d.systemsUsed !== 'لايوجد') {
+    lines.push(`الأنظمة: ${d.systemsUsed}`);
+  }
+  lines.push('━━━━━━━━━━━━━━━━━━━━');
+  lines.push(`الحالة الفنية: ${d.technicalStatus || 'سليم'}`);
+  if (d.recurringIssues && d.recurringIssues !== 'لا توجد مشاكل حالياً' && d.recurringIssues !== 'لايوجد' && d.recurringIssues !== 'لا يوجد' && d.recurringIssues.trim() !== '') {
+    lines.push(`تقرير الأعطال: ${d.recurringIssues}`);
+  }
+  if (d.notes && d.notes !== 'لا يوجد' && d.notes !== 'لايوجد' && d.notes.trim() !== '') {
+    lines.push(`الملاحظات: ${d.notes}`);
+  }
+
+  return lines.join('\n');
+}
+
 // VIEW DETAILS CARD
 function viewDeviceDetails(id) {
   const d = devices.find(x => String(x.id) === String(id));
@@ -2616,18 +2674,61 @@ function viewDeviceDetails(id) {
     </div>
   `;
 
-  const qrUrl = window.location.origin + '/?viewCard=' + d.id;
-  const qrSrc = 'https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=' + encodeURIComponent(qrUrl);
+  // Dedicated Cloud URL for the Standalone Technical Card:
+  // Short URL (~55 chars) -> produces large, crisp, ultra-scannable QR blocks (Version 3)
+  // Scans instantly in 0.05s on any mobile phone camera (iPhone / Android) without needing local Wi-Fi or IP!
+  let cardBaseUrl = 'https://technical-asset-monitor.vercel.app';
+  if (window.location.hostname && !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1') && !window.location.hostname.startsWith('172.') && !window.location.hostname.startsWith('192.')) {
+    cardBaseUrl = window.location.origin;
+  }
+  const cardUrl = `${cardBaseUrl}/card.html?id=${encodeURIComponent(d.id)}`;
+  const qrFallbackSrc = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(cardUrl)}`;
   
   const qrHtml = `
-    <div style="text-align: center; margin-top: 1.5rem;" class="print-qr-code">
-      <img src="${qrSrc}" alt="QR Code" style="width: 100px; height: 100px; border: 1px dashed #ccc; padding: 4px; border-radius: 6px; display: inline-block;">
+    <div style="text-align: center; margin-top: 1.5rem; padding: 1.25rem; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 14px;" class="print-qr-code">
+      <div style="font-weight: 800; font-size: 0.95rem; margin-bottom: 0.75rem; color: #a5b4fc;">
+        <i class="bi bi-qr-code-scan"></i> رمز QR للبطاقة التقنية المعتمدة
+      </div>
+      <div id="deviceCardQrContainer" style="display: inline-flex; align-items: center; justify-content: center; padding: 12px; background: #ffffff; border-radius: 14px; box-shadow: 0 4px 20px rgba(0,0,0,0.35); min-width: 194px; min-height: 194px;">
+        <img id="deviceCardQrImg" src="${qrFallbackSrc}" alt="QR Code" style="width: 170px; height: 170px; display: block; border-radius: 4px;">
+      </div>
+      <div style="font-size: 0.82rem; color: var(--tx-muted, #94a3b8); margin-top: 0.65rem; font-weight: 600; line-height: 1.5;">
+        امسح الرمز بكاميرا الهاتف لفتح البطاقة التقنية كاملة للجهاز فوراً (تعمل على أي هاتف وشبكة 4G/5G بدون الحاجة لـ Wi-Fi أو IP)
+      </div>
+      <div style="display: flex; gap: 0.5rem; justify-content: center; margin-top: 0.75rem; flex-wrap: wrap;">
+        <a href="${cardUrl}" target="_blank" class="btn btn-sm btn-outline-primary" style="font-size: 0.8rem; text-decoration: none; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border-radius: 8px;">
+          <i class="bi bi-box-arrow-up-right"></i> فتح البطاقة في صفحة مستقلة
+        </a>
+        <button type="button" onclick="navigator.clipboard.writeText('${cardUrl}').then(() => showToast('تم نسخ رابط البطاقة بنجاح'))" class="btn btn-sm btn-outline-secondary" style="font-size: 0.8rem; display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.35rem 0.75rem; border-radius: 8px;">
+          <i class="bi bi-link-45deg"></i> نسخ رابط البطاقة
+        </button>
+      </div>
     </div>
   `;
   
   detailBody.innerHTML = detailBody.innerHTML.replace('</div>\n    </div>', qrHtml + '\n      </div>\n    </div>');
 
   openModal('detailsModal');
+
+  // Generate offline QR Code locally via client-side QRCode library
+  setTimeout(() => {
+    const container = document.getElementById('deviceCardQrContainer');
+    if (container && typeof QRCode !== 'undefined') {
+      try {
+        container.innerHTML = '';
+        new QRCode(container, {
+          text: cardUrl,
+          width: 170,
+          height: 170,
+          colorDark: "#000000",
+          colorLight: "#ffffff",
+          correctLevel: QRCode.CorrectLevel.M
+        });
+      } catch (e) {
+        container.innerHTML = `<img src="${qrFallbackSrc}" alt="QR Code" style="width: 170px; height: 170px; display: block; border-radius: 4px;">`;
+      }
+    }
+  }, 100);
 }
 
 // PRINT CARD

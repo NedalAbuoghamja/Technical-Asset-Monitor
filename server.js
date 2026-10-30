@@ -810,6 +810,59 @@ app.get('/api/intune/lookup/:tag', authenticateToken, async (req, res) => {
   }
 });
 
+// Helper to find local LAN IP for mobile QR scanning
+function getLocalIpAddress() {
+  const os = require('os');
+  const ifaces = os.networkInterfaces();
+  for (const name in ifaces) {
+    for (const net of ifaces[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return '127.0.0.1';
+}
+
+// System network info for dynamic local QR codes
+app.get('/api/system/info', (req, res) => {
+  const localIp = getLocalIpAddress();
+  res.json({
+    localIp,
+    port: PORT,
+    localUrl: `http://${localIp}:${PORT}`
+  });
+});
+
+// Public Standalone Technical Card Endpoint (No login required for QR scanning)
+app.get('/api/public/card/:id', async (req, res) => {
+  try {
+    const rawId = req.params.id;
+    let device = null;
+    if (/^\d+$/.test(rawId)) {
+      device = await dbGet(`SELECT * FROM devices WHERE id = ?`, [parseInt(rawId)]);
+    }
+    if (!device) {
+      device = await dbGet(`SELECT * FROM devices WHERE UPPER(serviceTag) = ?`, [String(rawId).toUpperCase().trim()]);
+    }
+    if (!device) {
+      return res.status(404).json({ error: 'لم يتم العثور على بطاقة هذا الجهاز' });
+    }
+
+    if (device.customFields && typeof device.customFields === 'string') {
+      try { device.customFields = JSON.parse(device.customFields); } catch(e) { device.customFields = []; }
+    } else if (!device.customFields) {
+      device.customFields = [];
+    }
+
+    const columns = await dbAll(`SELECT * FROM columns`);
+    res.json({ success: true, device, columns });
+  } catch (err) {
+    console.error("Public card fetch error:", err);
+    res.status(500).json({ error: 'فشل في جلب بيانات بطاقة الجهاز: ' + err.message });
+  }
+});
+
 // Get all devices
 app.get('/api/devices', authenticateToken, async (req, res) => {
   try {

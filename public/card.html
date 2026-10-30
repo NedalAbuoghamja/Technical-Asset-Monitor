@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>بطاقة مواصفات العهدة التقنية — Technical Asset Monitor</title>
+  <meta name="description" content="البطاقة التقنية المعتمدة للأصل التقني">
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css">
+  <!-- Main Stylesheet -->
+  <link rel="stylesheet" href="css/styles_v2.css?v=2026.1">
+  <script src="js/qrcode.min.js"></script>
+  
+  <style>
+    body {
+      background: var(--bg-base, #070a14);
+      color: var(--tx-main, #eef1ff);
+      font-family: 'Cairo', sans-serif;
+      min-height: 100vh;
+      margin: 0;
+      padding: 1.5rem 1rem 3rem;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .card-page-wrapper {
+      width: 100%;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* Top Brand Bar */
+    .card-topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      padding: 0.75rem 1.25rem;
+      background: rgba(14, 22, 50, 0.6);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius: 14px;
+    }
+
+    .card-brand {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .card-brand-icon {
+      width: 38px;
+      height: 38px;
+      background: linear-gradient(135deg, #6366f1, #818cf8);
+      color: #fff;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.2rem;
+      box-shadow: 0 4px 12px rgba(99,102,241,0.3);
+    }
+
+    .card-brand-text h1 {
+      font-size: 1rem;
+      font-weight: 800;
+      margin: 0;
+      color: var(--tx-main, #fff);
+    }
+
+    .card-brand-text span {
+      font-size: 0.75rem;
+      color: var(--tx-muted, #94a3b8);
+      display: block;
+    }
+
+    .print-card-btn {
+      background: linear-gradient(135deg, #6366f1, #4f46e5);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 0.5rem 1rem;
+      font-size: 0.85rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      transition: all 0.2s ease;
+      box-shadow: 0 4px 14px rgba(99,102,241,0.25);
+    }
+
+    .print-card-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 18px rgba(99,102,241,0.35);
+    }
+
+    /* Loading State */
+    .card-loading {
+      text-align: center;
+      padding: 4rem 1rem;
+      background: rgba(14, 22, 50, 0.4);
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius: 20px;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 3px solid rgba(99,102,241,0.2);
+      border-top-color: #6366f1;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 1rem;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Error State */
+    .card-error {
+      text-align: center;
+      padding: 3rem 1.5rem;
+      background: rgba(239, 68, 68, 0.08);
+      border: 1px solid rgba(239, 68, 68, 0.25);
+      border-radius: 20px;
+      color: #f87171;
+    }
+
+    .card-error i {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      display: block;
+    }
+
+    /* Tech Card Custom Enhancements */
+    .tech-card {
+      background: var(--bg-card, rgba(14, 22, 50, 0.75));
+      border: 1px solid var(--border, rgba(255,255,255,0.08));
+      border-radius: 22px;
+      overflow: hidden;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    }
+
+    .tech-card-header {
+      background: linear-gradient(135deg, #1e1b4b, #312e81, #4338ca);
+      padding: 1.6rem 2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      position: relative;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+
+    .tech-card-title h4 {
+      font-size: 1.3rem;
+      font-weight: 900;
+      margin: 0 0 0.35rem;
+      color: #fff;
+    }
+
+    .tech-card-title span {
+      font-size: 0.95rem;
+      color: #c7d2fe;
+      font-weight: 600;
+    }
+
+    .tech-card-badge {
+      background: rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(255, 255, 255, 0.25);
+      color: #fff;
+      padding: 0.45rem 1.25rem;
+      border-radius: 999px;
+      font-weight: 800;
+      font-size: 0.9rem;
+      letter-spacing: 0.05rem;
+    }
+
+    .tech-card-sections {
+      padding: 1.75rem;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1.5rem;
+    }
+
+    .tech-section {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 14px;
+      padding: 1.25rem;
+    }
+
+    .tech-section.full-width {
+      grid-column: 1 / -1;
+    }
+
+    .tech-section h5 {
+      font-size: 0.92rem;
+      font-weight: 800;
+      color: #818cf8;
+      margin: 0 0 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      padding-bottom: 0.5rem;
+    }
+
+    .tech-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.85rem;
+    }
+
+    .tech-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2rem;
+    }
+
+    .tech-label {
+      font-size: 0.76rem;
+      color: var(--tx-muted, #94a3b8);
+      font-weight: 600;
+    }
+
+    .tech-val {
+      font-size: 0.88rem;
+      color: var(--tx-main, #eef1ff);
+      font-weight: 700;
+      word-break: break-word;
+    }
+
+    .tech-val code {
+      background: rgba(99,102,241,0.12);
+      color: #a5b4fc;
+      padding: 2px 6px;
+      border-radius: 5px;
+      font-family: monospace;
+      font-size: 0.85rem;
+    }
+
+    .sys-pill {
+      display: inline-block;
+      background: rgba(99, 102, 241, 0.12);
+      color: #c7d2fe;
+      border: 1px solid rgba(99, 102, 241, 0.25);
+      padding: 0.3rem 0.75rem;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      margin: 0.25rem 0.2rem;
+    }
+
+    .issue-alert-box {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 12px;
+      padding: 1rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      color: #fca5a5;
+      font-size: 0.85rem;
+    }
+
+    .issue-alert-box.no-issues {
+      background: rgba(16, 185, 129, 0.08);
+      border-color: rgba(16, 185, 129, 0.25);
+      color: #6ee7b7;
+    }
+
+    .notes-alert-box {
+      background: rgba(255,255,255,0.03);
+      border-right: 4px solid #6366f1;
+      padding: 0.85rem 1rem;
+      border-radius: 8px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: var(--tx-main, #eef1ff);
+    }
+
+    .verification-footer {
+      border-top: 1px dashed rgba(255,255,255,0.1);
+      padding: 1.5rem;
+      text-align: center;
+      background: rgba(0,0,0,0.15);
+    }
+
+    .verification-qr {
+      width: 110px;
+      height: 110px;
+      background: #fff;
+      padding: 6px;
+      border-radius: 10px;
+      display: inline-block;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      margin-bottom: 0.6rem;
+    }
+
+    .page-footer {
+      text-align: center;
+      margin-top: 1.5rem;
+      font-size: 0.78rem;
+      color: var(--tx-muted, #64748b);
+    }
+
+    @media (max-width: 768px) {
+      body { padding: 1rem 0.5rem 2rem; }
+      .tech-card-sections { grid-template-columns: 1fr; gap: 1rem; padding: 1rem; }
+      .tech-detail-grid { grid-template-columns: 1fr; }
+      .tech-card-header { flex-direction: column; align-items: flex-start; gap: 0.75rem; padding: 1.25rem; }
+    }
+
+    /* Print Styles */
+    @media print {
+      body { background: #fff !important; color: #000 !important; padding: 0 !important; }
+      .card-topbar, .print-card-btn, .page-footer { display: none !important; }
+      .card-page-wrapper { max-width: 100% !important; margin: 0 !important; }
+      .tech-card { border: 2px solid #ccc !important; box-shadow: none !important; background: #fff !important; }
+      .tech-card-header { background: #1e1b4b !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .tech-section { background: #fafafa !important; border-color: #ddd !important; }
+      .tech-label { color: #555 !important; }
+      .tech-val { color: #000 !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="card-page-wrapper">
+    <!-- Top Bar -->
+    <div class="card-topbar">
+      <div class="card-brand">
+        <div class="card-brand-icon">
+          <i class="bi bi-shield-check"></i>
+        </div>
+        <div class="card-brand-text">
+          <h1>بطاقة مواصفات العهدة التقنية</h1>
+          <span>منظومة مراقب الأصول التقنية · Reference Card</span>
+        </div>
+      </div>
+      <button class="print-card-btn" onclick="window.print()">
+        <i class="bi bi-printer-fill"></i>
+        <span>طباعة البطاقة</span>
+      </button>
+    </div>
+
+    <!-- Main Container -->
+    <div id="cardContainer">
+      <div class="card-loading">
+        <div class="spinner"></div>
+        <p style="margin: 0; font-weight: 600; color: var(--tx-muted);">جاري استدعاء بيانات الأصل التقني...</p>
+      </div>
+    </div>
+
+    <!-- Page Footer -->
+    <div class="page-footer">
+      شركة الاتصالات الدولية الليبية (LITC) &nbsp;·&nbsp; إدارة تقنية المعلومات والاتصالات &nbsp;·&nbsp; التحقق الرقمي للأصل
+    </div>
+  </div>
+
+  <script>
+    function translateNature(nature) {
+      if (!nature) return 'غير محدد';
+      const n = String(nature).toLowerCase();
+      if (n === 'desktop' || n === 'مكتبي') return 'مكتبي (Desktop)';
+      if (n === 'laptop' || n === 'محمول') return 'محمول (Laptop)';
+      if (n === 'printer' || n === 'طابعة') return 'طابعة (Printer)';
+      if (n === 'monitor' || n === 'شاشة') return 'شاشة (Monitor)';
+      return nature;
+    }
+
+    async function loadCard() {
+      const container = document.getElementById('cardContainer');
+      const params = new URLSearchParams(window.location.search);
+      const cardId = params.get('id') || params.get('tag') || params.get('viewCard');
+
+      if (!cardId) {
+        container.innerHTML = `
+          <div class="card-error">
+            <i class="bi bi-qr-code-scan"></i>
+            <h3>لم يتم تحديد رقم الأصل التقني</h3>
+            <p style="color: var(--tx-muted); margin: 0.5rem 0 0;">الرجاء مسح رمز QR صالح من على ملصق الجهاز التقني.</p>
+          </div>
+        `;
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/public/card/${encodeURIComponent(cardId)}`);
+        const data = await res.json();
+
+        if (!res.ok || !data.device) {
+          container.innerHTML = `
+            <div class="card-error">
+              <i class="bi bi-exclamation-triangle-fill"></i>
+              <h3>${data.error || 'لم يتم العثور على بطاقة هذا الجهاز'}</h3>
+              <p style="color: var(--tx-muted); margin: 0.5rem 0 0;">تأكد من صحة رقم الجهاز أو رمز الـ Service Tag الممسوح.</p>
+            </div>
+          `;
+          return;
+        }
+
+        renderCard(data.device, data.columns || []);
+      } catch (err) {
+        container.innerHTML = `
+          <div class="card-error">
+            <i class="bi bi-wifi-off"></i>
+            <h3>تعذر الاتصال بالخادم</h3>
+            <p style="color: var(--tx-muted); margin: 0.5rem 0 0;">تأكد من اتصال هاتفك بنفس الشبكة المحلية وحاول مجدداً.</p>
+          </div>
+        `;
+      }
+    }
+
+    function renderCard(d, columns) {
+      const container = document.getElementById('cardContainer');
+      const hasIssues = d.recurringIssues && d.recurringIssues !== 'لا توجد مشاكل حالياً' && d.recurringIssues !== 'لايوجد' && d.recurringIssues !== 'لا يوجد' && d.recurringIssues.trim() !== '';
+
+      // Systems list
+      let systemsHtml = '';
+      if (d.systemsUsed && d.systemsUsed !== 'لا يوجد' && d.systemsUsed !== 'لايوجد') {
+        const list = d.systemsUsed.split(/[,/،\+]/).map(s => s.trim()).filter(Boolean);
+        systemsHtml = list.map(s => `<span class="sys-pill">${s}</span>`).join('');
+      } else {
+        systemsHtml = `<span style="color: var(--tx-muted, #94a3b8); font-size: 0.85rem; font-style: italic;">لا توجد أنظمة أو برمجيات خاصة مسجلة</span>`;
+      }
+
+      // Custom fields per section
+      const getCustomFieldsHtml = (sec) => {
+        if (!d.customFields || !Array.isArray(d.customFields)) return '';
+        const secCols = columns.filter(c => c.section === sec).map(c => c.name);
+        const legacyKeys = [];
+        if (sec === 'specs') {
+          const allKnown = new Set(columns.map(c => c.name));
+          d.customFields.forEach(cf => { if (!allKnown.has(cf.label)) legacyKeys.push(cf.label); });
+        }
+        const fields = d.customFields.filter(cf => secCols.includes(cf.label) || legacyKeys.includes(cf.label));
+        if (fields.length === 0) return '';
+        return `
+          <div class="tech-detail-grid" style="margin-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); padding-top: 10px;">
+            ${fields.map(cf => `
+              <div class="tech-item" style="grid-column: 1 / -1;">
+                <span class="tech-label" style="color: #818cf8;">${cf.label}:</span>
+                <span class="tech-val">${cf.value}</span>
+              </div>
+            `).join('')}
+          </div>
+        `;
+      };
+
+      const customEmployee = getCustomFieldsHtml('employee');
+      const customSpecs = getCustomFieldsHtml('specs');
+      const customNotes = getCustomFieldsHtml('notes');
+
+      // Status badge styling
+      const status = d.technicalStatus || 'سليم';
+      let statusColor = '#10b981';
+      let statusBg = 'rgba(16, 185, 129, 0.15)';
+      if (status === 'بحاجة لصيانة') { statusColor = '#f87171'; statusBg = 'rgba(239, 68, 68, 0.15)'; }
+      else if (status === 'تحت الصيانة') { statusColor = '#fbbf24'; statusBg = 'rgba(245, 158, 11, 0.15)'; }
+
+      // Org path
+      const orgFormatted = d.orgPath ? d.orgPath.split('||').map(s => s.trim()).join(' <i class="bi bi-chevron-left" style="font-size:0.75rem;margin:0 4px;color:#818cf8;"></i> ') : 'لا يوجد';
+
+      // QR Code image for the bottom verification seal
+      const currentUrl = window.location.href;
+      const qrImgSrc = `https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(currentUrl)}`;
+
+      container.innerHTML = `
+        <div class="tech-card">
+          <!-- Card Header -->
+          <div class="tech-card-header">
+            <div class="tech-card-title">
+              <h4>بطاقة مواصفات العهدة التقنية</h4>
+              <span>المستلم: <strong>${d.employeeName || 'غير محدد'}</strong></span>
+            </div>
+            <div class="tech-card-badge">ID: #${d.employeeId ? d.employeeId : d.id}</div>
+          </div>
+
+          <!-- Card Body Sections -->
+          <div class="tech-card-sections">
+            <!-- Section 1: Employee & Department -->
+            <div class="tech-section">
+              <h5><i class="bi bi-person-badge-fill"></i> بيانات الجهة والموظف</h5>
+              <div class="tech-detail-grid">
+                <div class="tech-item" style="grid-column: 1 / -1;">
+                  <span class="tech-label">مكان الوظيفة (الهيكل التنظيمي):</span>
+                  <span class="tech-val">${orgFormatted}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">المستلم:</span>
+                  <span class="tech-val">${d.employeeName || 'لا يوجد'}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">الرقم الوظيفي:</span>
+                  <span class="tech-val" style="color: #818cf8; font-weight: 800;">${d.employeeId || 'لا يوجد'}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">الاسم بالإنجليزية:</span>
+                  <span class="tech-val" style="direction: ltr; text-align: right;">${d.englishName || 'لا يوجد'}</span>
+                </div>
+                <div class="tech-item" style="grid-column: 1 / -1;">
+                  <span class="tech-label">البريد الإلكتروني:</span>
+                  <span class="tech-val" style="direction: ltr; text-align: right;">${d.email ? `<a href="mailto:${d.email}" style="color: #818cf8; text-decoration: underline;">${d.email}</a>` : 'لا يوجد'}</span>
+                </div>
+              </div>
+              ${customEmployee}
+            </div>
+
+            <!-- Section 2: Technical Specs -->
+            <div class="tech-section">
+              <h5><i class="bi bi-cpu-fill"></i> المواصفات التقنية الفنية</h5>
+              <div class="tech-detail-grid">
+                <div class="tech-item">
+                  <span class="tech-label">موديل الجهاز:</span>
+                  <span class="tech-val">${d.deviceModel || 'لا يوجد'}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">اسم الجهاز (Computer Name):</span>
+                  <span class="tech-val" style="direction: ltr; text-align: right;"><code>${d.deviceName || 'لا يوجد'}</code></span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">طبيعة الجهاز:</span>
+                  <span class="tech-val">${translateNature(d.deviceNature)}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">الذاكرة العشوائية (RAM):</span>
+                  <span class="tech-val">${d.ram || 'غير متوفر'}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">سعة ونوع التخزين:</span>
+                  <span class="tech-val">${d.storageType || 'SSD'} ${d.storageSize || ''}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">عدد الشاشات المرفقة:</span>
+                  <span class="tech-val">${d.monitorsCount || 1} شاشات</span>
+                </div>
+                <div class="tech-item" style="grid-column: 1 / -1;">
+                  <span class="tech-label">رقم السيرفس تاق (Service Tag):</span>
+                  <span class="tech-val"><code style="font-size: 1rem; color: #38bdf8;">${d.serviceTag || 'لا يوجد'}</code></span>
+                </div>
+              </div>
+              ${customSpecs}
+            </div>
+
+            <!-- Section 3: Connection & OS -->
+            <div class="tech-section full-width">
+              <h5><i class="bi bi-hdd-network-fill"></i> بيانات الاتصال ونظام التشغيل</h5>
+              <div class="tech-detail-grid">
+                <div class="tech-item">
+                  <span class="tech-label">الهاتف الأرضي / Cisco IP Phone:</span>
+                  <span class="tech-val" style="color: #818cf8;">${d.phone || 'لا يوجد'}</span>
+                </div>
+                <div class="tech-item">
+                  <span class="tech-label">نظام التشغيل (OS):</span>
+                  <span class="tech-val" style="color: #818cf8;">${d.osVersion || 'لا يوجد'}</span>
+                </div>
+                ${d.deviceNature === 'Printer' ? `
+                <div class="tech-item">
+                  <span class="tech-label">طريقة التوصيل:</span>
+                  <span class="tech-val">${d.connectionType === 'Network' ? 'شبكة سلكية' : d.connectionType === 'Wireless' ? 'شبكة لاسلكية' : 'USB'}</span>
+                </div>` : ''}
+                ${d.ipAddress ? `
+                <div class="tech-item">
+                  <span class="tech-label">عنوان الـ IP:</span>
+                  <span class="tech-val" style="color: #818cf8; font-family: monospace;">${d.ipAddress}</span>
+                </div>` : ''}
+              </div>
+            </div>
+
+            <!-- Section 4: Systems & Software -->
+            <div class="tech-section full-width">
+              <h5><i class="bi bi-grid-3x3-gap-fill"></i> البرمجيات والأنظمة المستعملة</h5>
+              <div>${systemsHtml}</div>
+            </div>
+
+            <!-- Section 5: General Notes -->
+            <div class="tech-section full-width">
+              <h5><i class="bi bi-sticky-fill"></i> الملاحظات العامة</h5>
+              <div class="notes-alert-box">
+                ${d.notes && d.notes !== 'لا يوجد' && d.notes !== 'لايوجد' ? d.notes : '<span style="color: var(--tx-muted); font-style: italic;">لا توجد ملاحظات مسجلة على هذا الأصل</span>'}
+              </div>
+              ${customNotes}
+            </div>
+
+            <!-- Section 6: Security & Maintenance -->
+            <div class="tech-section full-width">
+              <h5><i class="bi bi-shield-exclamation"></i> الحالة الأمنية والفنية (الأمن السيبراني)</h5>
+              <div style="margin-bottom: 0.75rem; display: flex; gap: 0.6rem; align-items: center;">
+                <span class="tech-label" style="font-weight: 700; font-size: 0.85rem;">الحالة الفنية للأصل:</span>
+                <span style="background: ${statusBg}; color: ${statusColor}; border: 1px solid ${statusColor}; padding: 3px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem;">
+                  ${status}
+                </span>
+              </div>
+              ${hasIssues ? `
+                <div class="issue-alert-box">
+                  <i class="bi bi-exclamation-triangle-fill" style="font-size: 1.3rem;"></i>
+                  <div>
+                    <strong style="display: block; margin-bottom: 0.2rem;">تقرير الأعطال والمشاكل المسجلة:</strong>
+                    <span>${d.recurringIssues}</span>
+                  </div>
+                </div>
+              ` : `
+                <div class="issue-alert-box no-issues">
+                  <i class="bi bi-check-circle-fill" style="font-size: 1.2rem;"></i>
+                  <span>سليم — لا توجد أي مشاكل تقنية مسجلة حالياً على هذا الجهاز</span>
+                </div>
+              `}
+            </div>
+          </div>
+
+          <!-- Bottom Verification Seal -->
+          <div class="verification-footer">
+            <div id="cardVerificationQr" style="display: inline-flex; align-items: center; justify-content: center; background: #fff; padding: 6px; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.3); margin-bottom: 0.6rem; min-width: 110px; min-height: 110px;">
+              <img class="verification-qr" src="${qrImgSrc}" alt="QR Code" style="margin: 0;">
+            </div>
+            <div style="font-size: 0.78rem; font-weight: 700; color: #a5b4fc; margin-bottom: 0.2rem;">رمز التوثيق والتحقق الرقمي للأصل</div>
+            <div style="font-size: 0.7rem; color: var(--tx-muted, #94a3b8);">تاريخ الاستعلام: ${new Date().toLocaleDateString('ar-LY', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}</div>
+          </div>
+        </div>
+      `;
+
+      if (typeof QRCode !== 'undefined') {
+        try {
+          const sealBox = document.getElementById('cardVerificationQr');
+          if (sealBox) {
+            sealBox.innerHTML = '';
+            new QRCode(sealBox, {
+              text: currentUrl,
+              width: 100,
+              height: 100,
+              colorDark: '#000000',
+              colorLight: '#ffffff',
+              correctLevel: QRCode.CorrectLevel.M
+            });
+          }
+        } catch(e) {}
+      }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadCard);
+  </script>
+</body>
+</html>

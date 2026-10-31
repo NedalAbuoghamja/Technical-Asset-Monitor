@@ -47,8 +47,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; frame-ancestors 'none';");
   next();
 });
 
@@ -459,8 +460,8 @@ app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
 
     clearLoginAttempts(req);
 
-    const token = jwt.sign({ id: userId, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '365d' });
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000 });
+    const token = jwt.sign({ id: userId, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '12h' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 12 * 60 * 60 * 1000 });
     res.json({ success: true, user: { username: user.username, role: user.role, permissions: user.permissions } });
   } catch (error) {
     console.error('Login route error:', error);
@@ -548,8 +549,8 @@ app.post('/api/auth/onboarding/complete', checkLoginRateLimit, async (req, res) 
 
     clearLoginAttempts(req);
 
-    const token = jwt.sign({ id: userId, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '365d' });
-    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 365 * 24 * 60 * 60 * 1000 });
+    const token = jwt.sign({ id: userId, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '12h' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 12 * 60 * 60 * 1000 });
 
     res.json({
       success: true,
@@ -674,9 +675,9 @@ app.post('/api/auth/force-change-password', async (req, res) => {
       mustChangePassword: false
     });
 
-    // Sign a new token so they don't have to log in again
-    const token = jwt.sign({ id: doc.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '365d' });
-    res.cookie('token', token, { httpOnly: true });
+    // Sign a new token so they don't have to log in again (12 hours)
+    const token = jwt.sign({ id: doc.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '12h' });
+    res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'lax', maxAge: 12 * 60 * 60 * 1000 });
 
     res.json({ success: true, message: 'تم تغيير كلمة المرور بنجاح' });
   } catch (error) {

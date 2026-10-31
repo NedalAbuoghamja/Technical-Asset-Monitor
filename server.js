@@ -32,8 +32,9 @@ app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains; preload');
   res.setHeader('Permissions-Policy', 'geolocation=(), microphone=(), camera=()');
+  res.setHeader('Content-Security-Policy', "default-src 'self' https: data: blob: 'unsafe-inline' 'unsafe-eval'; img-src 'self' data: https: blob:; connect-src 'self' https:; font-src 'self' https: data:; frame-ancestors 'none';");
   next();
 });
 
@@ -536,8 +537,8 @@ app.post('/api/auth/login', checkLoginRateLimit, async (req, res) => {
     }
 
     clearLoginAttempts(req);
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '24h' });
-    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 24 * 60 * 60 * 1000 });
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '12h' });
+    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 12 * 60 * 60 * 1000 });
     res.json({ success: true, user: { username: user.username, role: user.role, permissions: user.permissions } });
   } catch (error) {
     console.error("Login error:", error);
@@ -599,8 +600,8 @@ app.post('/api/auth/onboarding/complete', checkLoginRateLimit, async (req, res) 
     clearLoginAttempts(req);
 
     // Issue session token
-    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '24h' });
-    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 24 * 60 * 60 * 1000 });
+    const token = jwt.sign({ id: user.id, username: user.username, role: user.role, permissions: user.permissions }, JWT_SECRET, { expiresIn: '12h' });
+    res.cookie('token', token, { httpOnly: true, secure: false, maxAge: 12 * 60 * 60 * 1000 });
 
     res.json({
       success: true,

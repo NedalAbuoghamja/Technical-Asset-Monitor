@@ -382,9 +382,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 <option value="all">الكل</option>
                 <option value="has_device">✅ يملك جهاز</option>
                 <option value="no_device">❌ ليس لديه جهاز</option>
-                <option value="Desktop"><span data-i18n="desktop">مكتبي (Desktop)</span></option>
-                <option value="Laptop"><span data-i18n="laptop">محمول (Laptop)</span></option>
-                <option value="Printer"><span data-i18n="printer">طابعة (Printer)</span></option>
+                <option value="Desktop" data-i18n="desktop">مكتبي (Desktop)</option>
+                <option value="Laptop" data-i18n="laptop">محمول (Laptop)</option>
+                <option value="Printer" data-i18n="printer">طابعة (Printer)</option>
                 <option value="Fingerprint">بصمة (Fingerprint)</option>
                 <option value="AccessPoint">أكسس بوينت (Access Point)</option>
               </select>
@@ -394,8 +394,8 @@ document.addEventListener('DOMContentLoaded', async () => {
               <label for="filterStatus"><span data-i18n="filter_status">الحالة:</span></label>
               <select id="filterStatus">
                 <option value="all">الكل</option>
-                <option value="clean"><span data-i18n="status_clean">سليم (بدون مشاكل)</span></option>
-                <option value="issues"><span data-i18n="status_issues">به مشاكل تقنية</span></option>
+                <option value="clean" data-i18n="status_clean">سليم (بدون مشاكل)</option>
+                <option value="issues" data-i18n="status_issues">به مشاكل تقنية</option>
                 <option value="need_maint">بحاجة لصيانة</option>
                 <option value="in_maint">تحت الصيانة</option>
               </select>
@@ -513,19 +513,19 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="form-group">
             <label for="assetType"><span data-i18n="asset_type">نوع الأصل (العهدة)</span></label>
             <select id="assetType" onchange="toggleDeviceFields()">
-              <option value="Computer"><span data-i18n="asset_computer">جهاز كمبيوتر (Computer)</span></option>
-              <option value="Printer"><span data-i18n="asset_printer">طابعة (Printer)</span></option>
+              <option value="Computer" data-i18n="asset_computer">جهاز كمبيوتر (Computer)</option>
+              <option value="Printer" data-i18n="asset_printer">طابعة (Printer)</option>
               <option value="Fingerprint">جهاز بصمة (Fingerprint)</option>
               <option value="AccessPoint">أكسس بوينت (Access Point)</option>
-              <option value="None"><span data-i18n="asset_none">أخرى / بدون (Other)</span></option>
+              <option value="None" data-i18n="asset_none">أخرى / بدون (Other)</option>
             </select>
           </div>
 
           <div class="form-group computer-only-fields">
             <label for="deviceNature"><span data-i18n="device_nature">طبيعة الجهاز</span></label>
             <select id="deviceNature">
-              <option value="Desktop"><span data-i18n="desktop">مكتبي (Desktop)</span></option>
-              <option value="Laptop"><span data-i18n="laptop">محمول (Laptop)</span></option>
+              <option value="Desktop" data-i18n="desktop">مكتبي (Desktop)</option>
+              <option value="Laptop" data-i18n="laptop">محمول (Laptop)</option>
             </select>
           </div>
           
@@ -606,9 +606,9 @@ document.addEventListener('DOMContentLoaded', async () => {
           <div class="form-group general-device-field">
             <label for="technicalStatus">الحالة التقنية للجهاز</label>
             <select id="technicalStatus">
-              <option value="سليم"><span data-i18n="status_ok">سليم</span></option>
-              <option value="بحاجة لصيانة"><span data-i18n="status_need_maint">بحاجة لصيانة</span></option>
-              <option value="تحت الصيانة"><span data-i18n="status_in_maint">تحت الصيانة</span></option>
+              <option value="سليم" data-i18n="status_ok">سليم</option>
+              <option value="بحاجة لصيانة" data-i18n="status_need_maint">بحاجة لصيانة</option>
+              <option value="تحت الصيانة" data-i18n="status_in_maint">تحت الصيانة</option>
             </select>
           </div>
           <div class="form-group pc-only-fields">
@@ -777,9 +777,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             <div class="form-group" style="margin-bottom: 0;">
               <label for="newUserRole">الصلاحية <span class="required">*</span></label>
               <select id="newUserRole" style="width: 100%;">
-                <option value="DataEntry"><span data-i18n="role_data_entry">مدخل بيانات (Data Entry)</span></option>
-                <option value="Supervisor"><span data-i18n="role_supervisor">مشرف (Supervisor)</span></option>
-                <option value="Admin"><span data-i18n="role_admin">مدير النظام (Admin)</span></option>
+                <option value="DataEntry">مدخل بيانات (Data Entry)</option>
+                <option value="Supervisor">مشرف (Supervisor)</option>
+                <option value="Admin">مدير النظام (Admin)</option>
               </select>
             </div>
             <div id="userPermissionsDiv" class="permissions-flex" style="grid-column: 1 / -1;">

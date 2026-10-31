@@ -329,19 +329,23 @@ function setupUserManagement() {
     });
   }
 
+  const newUserRoleInput = document.getElementById('newUserRole');
+  if (newUserRoleInput) {
+    newUserRoleInput.addEventListener('change', (e) => {
+      const permsDiv = document.getElementById('userPermissionsDiv');
+      if (permsDiv) {
+        permsDiv.style.opacity = e.target.value === 'Admin' ? '0.5' : '1';
+        permsDiv.style.pointerEvents = e.target.value === 'Admin' ? 'none' : 'auto';
+      }
+    });
+  }
+
   if (addUserForm) {
     addUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
       const usernameInput = document.getElementById('newUsername');
       const passwordInput = document.getElementById('newUserPassword');
       const roleInput = document.getElementById('newUserRole');
-      roleInput.addEventListener('change', (e) => {
-        const permsDiv = document.getElementById('userPermissionsDiv');
-        if (permsDiv) {
-          permsDiv.style.opacity = e.target.value === 'Admin' ? '0.5' : '1';
-          permsDiv.style.pointerEvents = e.target.value === 'Admin' ? 'none' : 'auto';
-        }
-      });
   
       const submitBtn = addUserForm.querySelector('button[type="submit"]');
       if (submitBtn) submitBtn.disabled = true;

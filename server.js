@@ -727,7 +727,7 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'يجب ألا تقل كلمة المرور عن 8 أحرف أو أرقام' });
   }
 
-  if (role !== 'Admin' && role !== 'User') {
+  if (role !== 'Admin' && role !== 'User' && role !== 'Supervisor' && role !== 'DataEntry') {
     return res.status(400).json({ error: 'الدور غير صالح' });
   }
 

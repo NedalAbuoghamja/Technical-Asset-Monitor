@@ -742,22 +742,34 @@ app.post('/api/admin/users', requireAdmin, async (req, res) => {
   const { username, password, role, permissions, mustChangePassword } = req.body;
   if (!username || !password || !role) return res.status(400).json({ error: 'جميع الحقول مطلوبة' });
 
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'يجب أن لا تقل كلمة المرور عن 8 خانات لأسباب أمنية' });
+  }
+
   try {
-    const snapshot = await db.collection('users').where('username', '==', username.trim()).get();
+    const cleanUsername = username.trim();
+    const snapshot = await db.collection('users').where('username', '==', cleanUsername).get();
     if (!snapshot.empty) return res.status(400).json({ error: 'اسم المستخدم موجود بالفعل' });
 
     const hashed = hashPassword(password);
     await db.collection('users').add({
-      username: username.trim(),
+      username: cleanUsername,
       password: hashed,
-      role,
-      permissions: JSON.stringify(permissions || {}),
-      mustChangePassword: mustChangePassword !== undefined ? mustChangePassword : true
+      role: role.trim(),
+      permissions: typeof permissions === 'string' ? permissions : JSON.stringify(permissions || {}),
+      mustChangePassword: mustChangePassword !== undefined ? !!mustChangePassword : true,
+      twoFactorEnabled: false,
+      twoFactorSecret: ''
     });
     res.status(201).json({ success: true, message: 'تم إضافة المستخدم بنجاح' });
-    logSystemActivity('add', 'user', username.trim(), req.user.username);
+    try {
+      logSystemActivity('add', 'user', cleanUsername, req.user.username);
+    } catch(logErr) {
+      console.warn('Logging user add activity failed:', logErr.message);
+    }
   } catch (error) {
-    res.status(500).json({ error: 'فشل في إضافة المستخدم' });
+    console.error('Error adding user to Firestore:', error);
+    res.status(500).json({ error: error.message || 'فشل في إضافة المستخدم' });
   }
 });
 
